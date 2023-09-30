@@ -5,9 +5,9 @@
 
 int main() {
   Eigen::Matrix3d state;
-  state<<1, 0, -1,
-               0, 1, 0,
-    0, -1, -1;
+  state<<1, -1, -1,
+    0,  0,  1,
+    0, -1,  0;
   std::cout<<"optimal value for state: "<<getOptimalValue(state)<<std::endl;
   return 0;
 }

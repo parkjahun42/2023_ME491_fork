@@ -36,7 +36,6 @@ class TicTacToe {
   Eigen::MatrixXd map_;
   int mapTotalCount_, mapSize_;
   double gamma_ = 0.98;
-  int count = 0;
   double valueTable[3][3][3][3][3][3][3][3][3] = {0.0};
 
 };
@@ -156,27 +155,25 @@ double TicTacToe::takeActions(const Eigen::MatrixXd &map) {
     TicTacToe::Type nextStateType;
     Eigen::VectorXd tempValue;
     Eigen::MatrixXd actionMap;
-    count++;
     mapEmptyIndex = checkEmptyState(map);
     tempValue.setZero(mapEmptyIndex(mapTotalCount_));
     actionMap.setZero(mapSize_, mapSize_);
-//  printCurrentState(map);
     nextStateType = checkTermination(map);
-    if (nextStateType != TicTacToe::Type::KEEP_GO) {
+    if (nextStateType != TicTacToe::Type::KEEP_GO) {  //Check Termination and give Value
         setValue(map, (double)(nextStateType) / 2);
         return (double) nextStateType / 2;
     }
     else {
-        for (int i = mapEmptyIndex(mapTotalCount_) - 1; i >= 0; i--) {
+        for (int i = mapEmptyIndex(mapTotalCount_) - 1; i >= 0; i--) { //Iterate actions for all empty grid
             actionMap = map;
             actionMap(mapEmptyIndex(i)) = 1.0;
 //    printCurrentState(actionMap);
             tempValue(i) = takeOpponentActionAndGetRewardValue(
-                    actionMap); //Get Reward and next state value(if terminated, 0)
+                    actionMap); //Get Value(Reward) for action
         }
 
         double maxValue;
-        for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) {
+        for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) {  //Take max value from all actions
             if (i == 0) maxValue = tempValue(0);
             if (tempValue(i) > maxValue) maxValue = tempValue(i);
         }
@@ -187,16 +184,14 @@ double TicTacToe::takeActions(const Eigen::MatrixXd &map) {
     }
 }
 
-double TicTacToe::takeActionsOppenentFirst(const Eigen::MatrixXd &map){
+double TicTacToe::takeActionsOppenentFirst(const Eigen::MatrixXd &map){ //When oppenent start first
   Eigen::VectorXi mapEmptyIndex;
   TicTacToe::Type nextStateType;
   Eigen::VectorXd tempValue;
   Eigen::MatrixXd actionMap, opponentMap;
-  count ++;
 
   actionMap.setZero(mapSize_, mapSize_);
   opponentMap.setZero(mapSize_, mapSize_);
-//  printCurrentState(map);
   for(int j = 0; j<9; j++)
   {
     opponentMap = map;
@@ -208,7 +203,7 @@ double TicTacToe::takeActionsOppenentFirst(const Eigen::MatrixXd &map){
       actionMap = opponentMap;
       actionMap(mapEmptyIndex(i)) = 1.0;
 //      printCurrentState(actionMap);
-      tempValue(i) = takeOpponentActionAndGetRewardValue(actionMap); //Get Reward and next state value(if terminated, 0)
+      tempValue(i) = takeOpponentActionAndGetRewardValue(actionMap);
     }
       double maxValue;
       for(int i =0; i<mapEmptyIndex(mapTotalCount_); i++)
@@ -232,10 +227,8 @@ double TicTacToe::takeOpponentActionAndGetRewardValue(const Eigen::MatrixXd &act
   Eigen::Matrix<double, 3, 3> nextMap;
   double reward = 0.0, value = 0.0;
 
-//  nextMap.setZero(mapSize_, mapSize_);
-
   nextStateType = checkTermination(actionMap);
-  if(nextStateType != TicTacToe::Type::KEEP_GO){
+  if(nextStateType != TicTacToe::Type::KEEP_GO){  //Terminate when user finished game. give value because we should give value for next state and multiply discount factor
 //    reward = (double)nextStateType / 2;
     value = (double)nextStateType / 2; //Terminate State
   }
@@ -243,10 +236,10 @@ double TicTacToe::takeOpponentActionAndGetRewardValue(const Eigen::MatrixXd &act
     reward = 0.0;
     mapEmptyIndex = checkEmptyState(actionMap);
 
-    for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) {
+    for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) { //caculate value for all opponent action
       nextMap = actionMap;
       nextMap(mapEmptyIndex(i)) = -1.0;
-      value += takeActions(nextMap) / mapEmptyIndex(mapTotalCount_); //value for next state
+      value += takeActions(nextMap) / mapEmptyIndex(mapTotalCount_);
     }
   }
 
