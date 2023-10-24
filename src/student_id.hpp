@@ -178,31 +178,30 @@ Eigen::VectorXi DotsAndBoxes::checkEmptyState(const Eigen::VectorXd &map) {
 
 }
 
-double DotsAndBoxes::policyEvaluation(const Eigen::VectorXd &map){
+double DotsAndBoxes::policyEvaluation(Eigen::VectorXd &map){
   //Fixed policy, get Value function
   Eigen::VectorXi mapEmptyIndex;
   DotsAndBoxes::Type nextStateType;
-  Eigen::VectorXd tempValue;
+  double nextStateValue = 0.0, reward = 0.0;
   Eigen::VectorXd actionMap;
   mapEmptyIndex = checkEmptyState(map);
-  tempValue.setZero(mapEmptyIndex(mapTotalCount_));
   actionMap.setZero(mapSize_);
   nextStateType = checkTermination(map);
-  if (nextStateType != DotsAndBoxes::Type::KEEP_GO) {  //Check Termination and give Value
-      setValue(map, (double)(nextStateType) / 2);
-      return (double) nextStateType / 2;
-  }
-  else {
+//  if (nextStateType != DotsAndBoxes::Type::KEEP_GO) {  //Check Termination and give Value
+//      setValue(map, (double)(nextStateType) / 2);
+//      return (double) nextStateType / 2;
+//  }
+//  else {
 
-      actionMap = map;
-      actionMap(getActionFromPolicy(map)) = 1.0;
-      tempValue(0) = takeOpponentActionAndGetRewardValue(
-                actionMap);
+  actionMap = map;
+  actionMap(getActionFromPolicy(map)) = 1.0;
+  reward = giveReward(actionMap, map); // Caculate Reward
+  nextStateValue = takeOpponentActionAndGetRewardValue(actionMap); //Get v(s') by recursive function
 
-      setValue(map, tempValue(0));
+  setValue(map, reward + gamma_ * nextStateValue);
 
-      return tempValue(0);
-  }
+  return tempValue(0);
+//  }
 }
 
 double DotsAndBoxes::takeActions(const Eigen::VectorXd &map) {
@@ -293,7 +292,7 @@ double DotsAndBoxes::takeOpponentActionAndGetRewardValue(const Eigen::MatrixXd &
 
     for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) { //caculate value for all opponent action
       nextMap = actionMap;
-      nextMap(mapEmptyIndex(i)) = -1.0;
+      nextMap(mapEmptyIndex(i)) = 1.0;
       value += takeActions(nextMap) / mapEmptyIndex(mapTotalCount_);
     }
   }
