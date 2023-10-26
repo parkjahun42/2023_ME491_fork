@@ -5,8 +5,8 @@
 class DotsAndBoxes {
 
  public:
-  std::vector<Eigen::VectorXd> terminateStates;
-  std::vector<Eigen::VectorXd> rewardStates;
+  std::vector<Eigen::VectorXi> terminateStates;
+  std::vector<Eigen::VectorXi> rewardStates;
     enum class Type{
     KEEP_GO = -1,
     TERMINATE, //0
@@ -20,18 +20,19 @@ class DotsAndBoxes {
     }takeActionType_ = TakeActionType::EVALUATION;
 
   DotsAndBoxes(int mapsize);
-  void policyEvaluation(bool isTrue);
-  void policyImprovement(bool isTrue);
+  void policyEvaluation(bool isFirst);
+  void policyImprovement(bool isFirst);
+  double checkPolicyTerminateCondition();
   void train();
-  void printCurrentState(const Eigen::VectorXd &map);
-  void setState(const Eigen::VectorXd &map);
-  void setValue(const Eigen::VectorXd &map, double value);
-  void setPolicy(const Eigen::VectorXd &map, int policy);
-  double getValue(const Eigen::VectorXd &map);
-  int getPolicy(const Eigen::VectorXd &map);
-  void setCaculatedValue(const Eigen::VectorXd &map, int policy);
-  int getCaculatedValue(const Eigen::VectorXd &map);
-  DotsAndBoxes::Type checkTermination(const Eigen::VectorXd map);
+  void printCurrentState(const Eigen::VectorXi &map);
+  void setState(const Eigen::VectorXi &map);
+  void setValue(const Eigen::VectorXi &map, double value);
+  void setPolicy(const Eigen::VectorXi &map, int policy);
+  double getValue(const Eigen::VectorXi &map);
+  int getPolicy(const Eigen::VectorXi &map);
+  void setCaculatedValue(const Eigen::VectorXi &map, int policy);
+  int getCaculatedValue(const Eigen::VectorXi &map);
+  DotsAndBoxes::Type checkTermination(const Eigen::VectorXi map);
 
   //Become private
 
@@ -41,15 +42,15 @@ class DotsAndBoxes {
   int count_=0;
   void initTerminateStates();
   void initRewardStates();
-  double giveReward(const Eigen::VectorXd &map, const  Eigen::VectorXd &preMap);
-  Eigen::VectorXi checkEmptyState(const Eigen::VectorXd &map);
-  int getActionFromPolicy(const Eigen::VectorXd &map, bool isFirst);
-  double takeActions(const Eigen::VectorXd &map, TakeActionType takeActionType, bool isFirst);
-  double takeActionsOppenentFirst(const Eigen::VectorXd &map);
-  double takeOpponentActionAndGetRewardValue(const Eigen::VectorXd &actionMap, TakeActionType takeActionType, bool isFirst);
+  double giveReward(const Eigen::VectorXi &map, const  Eigen::VectorXi &preMap);
+  Eigen::VectorXi checkEmptyState(const Eigen::VectorXi &map);
+  int getActionFromPolicy(const Eigen::VectorXi &map, bool isFirst);
+  double takeActions(const Eigen::VectorXi &map, TakeActionType takeActionType, bool isFirst);
+  double takeActionsOppenentFirst(const Eigen::VectorXi &map);
+  double takeOpponentActionAndGetRewardValue(const Eigen::VectorXi &actionMap, TakeActionType takeActionType, bool isFirst);
 
 
-  Eigen::VectorXd map_;
+  Eigen::VectorXi map_;
   int mapTotalCount_, mapSize_;
   double gamma_ = 1.0;
   double valueTable[2][2][2][2][2][2][2][2][2][2][2][2] = {0.0};
@@ -67,8 +68,8 @@ DotsAndBoxes::DotsAndBoxes(int mapsize) {
   initRewardStates();
 }
 
-void DotsAndBoxes::policyEvaluation(bool isTrue){
-    Eigen::VectorXd map;
+void DotsAndBoxes::policyEvaluation(bool isFirst){
+    Eigen::VectorXi map;
   map.setZero(mapSize_);
   for(int a = 0; a<2; a++){
   for(int b = 0; b<2; b++){
@@ -83,7 +84,7 @@ void DotsAndBoxes::policyEvaluation(bool isTrue){
   for(int k = 0; k<2; k++){
   for(int l = 0; l<2; l++){
     map << a, b, c, d, e, f, g, h, i, j, k, l;
-    takeActions(map, TakeActionType::EVALUATION, isTrue);
+    takeActions(map, TakeActionType::EVALUATION, isFirst);
   }
   }
   }
@@ -98,8 +99,8 @@ void DotsAndBoxes::policyEvaluation(bool isTrue){
   }
 }
 
-void DotsAndBoxes::policyImprovement(bool isTrue){
-    Eigen::VectorXd map;
+void DotsAndBoxes::policyImprovement(bool isFirst){
+    Eigen::VectorXi map;
   map.setZero(mapSize_);
   for(int a = 0; a<2; a++){
   for(int b = 0; b<2; b++){
@@ -114,7 +115,7 @@ void DotsAndBoxes::policyImprovement(bool isTrue){
   for(int k = 0; k<2; k++){
   for(int l = 0; l<2; l++){
     map << a, b, c, d, e, f, g, h, i, j, k, l;
-    takeActions(map, TakeActionType::IMPROVEMENT, isTrue);
+    takeActions(map, TakeActionType::IMPROVEMENT, isFirst);
   }
   }
   }
@@ -127,36 +128,80 @@ void DotsAndBoxes::policyImprovement(bool isTrue){
   }
   }
   }
+}
+
+double DotsAndBoxes::checkPolicyTerminateCondition(){
+  double value=0.0;
+  Eigen::VectorXi map;
+  map.setZero(mapSize_);
+  for(int a = 0; a<2; a++){
+  for(int b = 0; b<2; b++){
+  for(int c = 0; c<2; c++){
+  for(int d = 0; d<2; d++){
+  for(int e = 0; e<2; e++){
+  for(int f = 0; f<2; f++){
+  for(int g = 0; g<2; g++){
+  for(int h = 0; h<2; h++){
+  for(int i = 0; i<2; i++){
+  for(int j = 0; j<2; j++){
+  for(int k = 0; k<2; k++){
+  for(int l = 0; l<2; l++){
+    map << a, b, c, d, e, f, g, h, i, j, k, l;
+    value+= getValue(map);
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+  }
+
+  return value;
 }
 
 void DotsAndBoxes::train(){
-  Eigen::VectorXd map;
+  Eigen::VectorXi map, map1;
+  double valueSum, preValueSum;
+  valueSum=0.0; preValueSum=0.0;
   map.setZero(mapSize_);
-  std::cout << "===================EVALUATION!!===================" << std::endl;
+  map1.setZero(mapSize_);
   policyEvaluation(true);
-//  takeActions(map, TakeActionType::EVALUATION, true);
-  std::cout << "===================IMPROVEMENT!!===================" << std::endl;
   map.setZero(mapSize_);
   policyImprovement(true);
-
+  valueSum = checkPolicyTerminateCondition();
+  if(abs(valueSum - preValueSum) < 1e-5)
+  {
+    return;
+  }
+  else{
+    preValueSum = valueSum;
+  }
   for(int i = 0 ; i<100; i++)
   {
     memset(caculatedValue, 0, sizeof(caculatedValue));
     map.setZero(mapSize_);
-    std::cout << getValue(map) << std::endl;
-    std::cout << getPolicy(map) << std::endl;
-    std::cout << "===================EVALUATION!!===================" << std::endl;
     policyEvaluation(false);
-  //  takeActions(map, TakeActionType::EVALUATION, true);
-    std::cout << "===================IMPROVEMENT!!===================" << std::endl;
     map.setZero(mapSize_);
     policyImprovement(false);
-//    takeActions(map, TakeActionType::IMPROVEMENT, false);
+    valueSum = checkPolicyTerminateCondition();
+    if(abs(valueSum - preValueSum) < 1e-5)
+    {
+      return;
+    }
+    else{
+      preValueSum = valueSum;
+    }
   }
+  return;
 
 }
 
-void DotsAndBoxes::printCurrentState(const Eigen::VectorXd &map) {
+void DotsAndBoxes::printCurrentState(const Eigen::VectorXi &map) {
   std::cout << "\n==\t==\t==" << std::endl;
   std::cout << "o";
   if(map(0) == 1) std::cout << " ㅡ " ;
@@ -194,41 +239,41 @@ void DotsAndBoxes::printCurrentState(const Eigen::VectorXd &map) {
   std::cout << "==\t==\t==" << std::endl;
 }
 
-void DotsAndBoxes::setState(const Eigen::VectorXd &map) {
+void DotsAndBoxes::setState(const Eigen::VectorXi &map) {
   map_ = map;
 }
 
-void DotsAndBoxes::setValue(const Eigen::VectorXd &map, double value)
+void DotsAndBoxes::setValue(const Eigen::VectorXi &map, double value)
 {
   valueTable[(int)map(0)][(int)map(1)][(int)map(2)][(int)map(3)][(int)map(4)][(int)map(5)][(int)map(6)][(int)map(7)][(int)map(8)][(int)map(9)][(int)map(10)][(int)map(11)] = value;
 }
 
-void DotsAndBoxes::setPolicy(const Eigen::VectorXd &map, int policy)
+void DotsAndBoxes::setPolicy(const Eigen::VectorXi &map, int policy)
 {
   policyTable[(int)map(0)][(int)map(1)][(int)map(2)][(int)map(3)][(int)map(4)][(int)map(5)][(int)map(6)][(int)map(7)][(int)map(8)][(int)map(9)][(int)map(10)][(int)map(11)] = policy;
 }
 
-void DotsAndBoxes::setCaculatedValue(const Eigen::VectorXd &map, int iscaculated)
+void DotsAndBoxes::setCaculatedValue(const Eigen::VectorXi &map, int iscaculated)
 {
   caculatedValue[(int)map(0)][(int)map(1)][(int)map(2)][(int)map(3)][(int)map(4)][(int)map(5)][(int)map(6)][(int)map(7)][(int)map(8)][(int)map(9)][(int)map(10)][(int)map(11)] = iscaculated;
 }
 
-double DotsAndBoxes::getValue(const Eigen::VectorXd &map) {
+double DotsAndBoxes::getValue(const Eigen::VectorXi &map) {
   return valueTable[(int)map(0)][(int)map(1)][(int)map(2)][(int)map(3)][(int)map(4)][(int)map(5)][(int)map(6)][(int)map(7)][(int)map(8)][(int)map(9)][(int)map(10)][(int)map(11)];
 }
 
-int DotsAndBoxes::getPolicy(const Eigen::VectorXd &map)
+int DotsAndBoxes::getPolicy(const Eigen::VectorXi &map)
 {
   return policyTable[(int)map(0)][(int)map(1)][(int)map(2)][(int)map(3)][(int)map(4)][(int)map(5)][(int)map(6)][(int)map(7)][(int)map(8)][(int)map(9)][(int)map(10)][(int)map(11)];
 }
 
-int DotsAndBoxes::getCaculatedValue(const Eigen::VectorXd &map) {
+int DotsAndBoxes::getCaculatedValue(const Eigen::VectorXi &map) {
   return caculatedValue[(int)map(0)][(int)map(1)][(int)map(2)][(int)map(3)][(int)map(4)][(int)map(5)][(int)map(6)][(int)map(7)][(int)map(8)][(int)map(9)][(int)map(10)][(int)map(11)];
 }
 
 //Should be changed when mapsize become different
 void DotsAndBoxes::initTerminateStates() {
-  Eigen::VectorXd terminateState;
+  Eigen::VectorXi terminateState;
   terminateState.setZero(mapTotalCount_);
 
   terminateState << 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1;
@@ -236,7 +281,7 @@ void DotsAndBoxes::initTerminateStates() {
 }
 
 void DotsAndBoxes::initRewardStates() {
-  Eigen::VectorXd rewardState;
+  Eigen::VectorXi rewardState;
   rewardState.setZero(mapTotalCount_);
   //             0  1  2  3  4  5  6  7  8  9  10  11
   rewardState << 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0;
@@ -249,7 +294,7 @@ void DotsAndBoxes::initRewardStates() {
   rewardStates.push_back(rewardState);
 }
 
-DotsAndBoxes::Type DotsAndBoxes::checkTermination(const Eigen::VectorXd map) {
+DotsAndBoxes::Type DotsAndBoxes::checkTermination(const Eigen::VectorXi map) {
 
   for(auto terminateState:terminateStates){
     int markSum = (map.array() * terminateState.array()).sum();
@@ -262,7 +307,7 @@ DotsAndBoxes::Type DotsAndBoxes::checkTermination(const Eigen::VectorXd map) {
 }
 
 
-double DotsAndBoxes::giveReward(const Eigen::VectorXd &map, const Eigen::VectorXd &preMap) {
+double DotsAndBoxes::giveReward(const Eigen::VectorXi &map, const Eigen::VectorXi &preMap) {
 
   double rewardSum = 0.0;
 
@@ -277,11 +322,10 @@ double DotsAndBoxes::giveReward(const Eigen::VectorXd &map, const Eigen::VectorX
   return rewardSum;
 }
 
-Eigen::VectorXi DotsAndBoxes::checkEmptyState(const Eigen::VectorXd &map) {
+Eigen::VectorXi DotsAndBoxes::checkEmptyState(const Eigen::VectorXi &map) {
   int emptyCounter = 0;
   Eigen::VectorXi mapEmptyIndex;
   mapEmptyIndex.setZero(mapSize_ + 1);
-
 
   for(int i = 0; i<mapTotalCount_; i++)
   {
@@ -296,7 +340,7 @@ Eigen::VectorXi DotsAndBoxes::checkEmptyState(const Eigen::VectorXd &map) {
 
 }
 
-int DotsAndBoxes::getActionFromPolicy(const Eigen::VectorXd &map, bool isFirst){
+int DotsAndBoxes::getActionFromPolicy(const Eigen::VectorXi &map, bool isFirst){
   if(checkTermination(map) !=DotsAndBoxes::Type::KEEP_GO){
     std::cout << "Terminate state! Cant get action!" << std::endl;
     return -1;
@@ -312,16 +356,13 @@ int DotsAndBoxes::getActionFromPolicy(const Eigen::VectorXd &map, bool isFirst){
   }
 }
 
-//이슈 : 액션을 취한 다음에 넘길때 내 차롄지, 상대방 차례인지를 알아야 함.
-// 또 내 차례면 바로 takeActions 넣어줘 value를 내뱉으면 됨.
-// 4
-double DotsAndBoxes::takeActions(const Eigen::VectorXd &map, TakeActionType takeActionType, bool isFirst){
+double DotsAndBoxes::takeActions(const Eigen::VectorXi &map, TakeActionType takeActionType, bool isFirst){
 
   Eigen::VectorXi mapEmptyIndex;
   DotsAndBoxes::Type nextStateType;
   double nextStateValue = 0.0, reward = 0.0;
   Eigen::VectorXd tempValue;
-  Eigen::VectorXd actionMap;
+  Eigen::VectorXi actionMap;
   mapEmptyIndex = checkEmptyState(map);
   tempValue.setZero(mapEmptyIndex(mapTotalCount_));
   actionMap.setZero(mapTotalCount_);
@@ -338,47 +379,32 @@ double DotsAndBoxes::takeActions(const Eigen::VectorXd &map, TakeActionType take
       reward = giveReward(actionMap, map); // Caculate Reward
       if (reward > 1e-4) {
          if(getCaculatedValue(actionMap)) nextStateValue = getValue(actionMap);
-         else {
-           nextStateValue = takeActions(actionMap, takeActionType, isFirst);
-
-         }
+         else nextStateValue = takeActions(actionMap, takeActionType, isFirst);
       }
       else nextStateValue = takeOpponentActionAndGetRewardValue(actionMap, takeActionType, isFirst); //Get v(s') by recursive function
 
       setValue(map, reward + gamma_ * nextStateValue);
       setCaculatedValue(map, 1);
-      count_++;
-      return reward + gamma_ * nextStateValue;
 
+//      std::cout << count_ << std::endl;
+      return reward + gamma_ * nextStateValue;
     }
     else if (takeActionType == TakeActionType::IMPROVEMENT) { //Improve policy with q value
-      for (int i = mapEmptyIndex(mapTotalCount_) - 1; i >= 0; i--) { //Iterate actions for all empty grid
+      for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) { //Iterate actions for all empty grid
         actionMap = map;
         actionMap(mapEmptyIndex(i)) = 1.0; //q function (s, a)
-//        printCurrentState(actionMap);
         reward = giveReward(actionMap, map); // Caculate Reward
 
-        if (reward > 1e-4) { // Do Action Again
-          if(getCaculatedValue(actionMap))
-          {
-            tempValue(i) = reward + gamma_ * getValue(actionMap);
-          }
-          else {
-            printCurrentState(actionMap);
-            tempValue(i) = reward + gamma_ * takeActions(actionMap, takeActionType, isFirst);
-            setCaculatedValue(actionMap, 1);
-          }
-        }
-        else { // Give Turn to opponent
-          tempValue(i) = reward + gamma_ * takeOpponentActionAndGetRewardValue(actionMap, takeActionType, isFirst); //Get v(s') by recursive function
-        }
+        if (reward > 1e-4){
+          tempValue(i) = reward + gamma_ * getValue(actionMap); }// Do Action Again
+        else tempValue(i) = reward + gamma_ * takeOpponentActionAndGetRewardValue(actionMap, takeActionType, isFirst); //Get v(s') by recursive function
       }
 
       double maxValue, maxValueIndex;
       for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) {  //Improve policy with maximum state action value
         if (i == 0) {
-          maxValue = tempValue(0);
-          maxValueIndex = 0;
+          maxValue = tempValue(i);
+          maxValueIndex = mapEmptyIndex(i);
         }
         if (tempValue(i) > maxValue) {
           maxValue = tempValue(i);
@@ -387,7 +413,6 @@ double DotsAndBoxes::takeActions(const Eigen::VectorXd &map, TakeActionType take
       }
 
       setPolicy(map, maxValueIndex);
-
       return getValue(map);
     }
   }
@@ -396,86 +421,15 @@ double DotsAndBoxes::takeActions(const Eigen::VectorXd &map, TakeActionType take
 
 }
 
-//double DotsAndBoxes::takeActions(const Eigen::VectorXd &map) {
-//    Eigen::VectorXi mapEmptyIndex;
-//    DotsAndBoxes::Type nextStateType;
-//    Eigen::VectorXd tempValue;
-//    Eigen::VectorXd actionMap;
-//    mapEmptyIndex = checkEmptyState(map);
-//    tempValue.setZero(mapEmptyIndex(mapTotalCount_));
-//    actionMap.setZero(mapSize_);
-//    nextStateType = checkTermination(map);
-//    if (nextStateType != DotsAndBoxes::Type::KEEP_GO) {  //Check Termination and give Value
-//        setValue(map, (double)(nextStateType) / 2);
-//        return (double) nextStateType / 2;
-//    }
-//    else {
-//        for (int i = mapEmptyIndex(mapTotalCount_) - 1; i >= 0; i--) { //Iterate actions for all empty grid
-//            actionMap = map;
-//            actionMap(mapEmptyIndex(i)) = 1.0;
-////    printCurrentState(actionMap);
-//            tempValue(i) = takeOpponentActionAndGetRewardValue(
-//                    actionMap); //Get Value(Reward) for action
-//        }
-//
-//        double maxValue;
-//        for (int i = 0; i < mapEmptyIndex(mapTotalCount_); i++) {  //Take max value from all actions
-//            if (i == 0) maxValue = tempValue(0);
-//            if (tempValue(i) > maxValue) maxValue = tempValue(i);
-//        }
-//
-//        setValue(map, maxValue);
-//
-//        return maxValue;
-//    }
-//}
-
-//double DotsAndBoxes::takeActionsOppenentFirst(const Eigen::VectorXd &map){ //When oppenent start first
-//  Eigen::VectorXi mapEmptyIndex;
-//  DotsAndBoxes::Type nextStateType;
-//  Eigen::VectorXd tempValue;
-//  Eigen::MatrixXd actionMap, opponentMap;
-//
-//  actionMap.setZero(mapSize_, mapSize_);
-//  opponentMap.setZero(mapSize_, mapSize_);
-//  for(int j = 0; j<9; j++)
-//  {
-//    opponentMap = map;
-//    opponentMap(j) = -1.0;
-//    mapEmptyIndex = checkEmptyState(opponentMap);
-//    tempValue.setZero(mapEmptyIndex(mapTotalCount_));
-//    for(int i =mapEmptyIndex(mapTotalCount_)-1; i>= 0; i--)
-//    {
-//      actionMap = opponentMap;
-//      actionMap(mapEmptyIndex(i)) = 1.0;
-////      printCurrentState(actionMap);
-//      tempValue(i) = takeOpponentActionAndGetRewardValue(actionMap);
-//    }
-//      double maxValue;
-//      for(int i =0; i<mapEmptyIndex(mapTotalCount_); i++)
-//      {
-//        if(i == 0) maxValue = tempValue(0);
-//        if(tempValue(i) > maxValue) maxValue = tempValue(i);
-//      }
-//
-//      setValue(opponentMap, maxValue);
-//  }
-//
-//
-//
-//
-//  return 1.0;
-//}
-
-double DotsAndBoxes::takeOpponentActionAndGetRewardValue(const Eigen::VectorXd &actionMap, TakeActionType takeActionType, bool isFirst) {
+double DotsAndBoxes::takeOpponentActionAndGetRewardValue(const Eigen::VectorXi &actionMap, TakeActionType takeActionType, bool isFirst) {
   DotsAndBoxes::Type nextStateType;
   Eigen::VectorXi mapEmptyIndex;
-  Eigen::VectorXd nextMap;
-  nextMap.setZero(mapTotalCount_);
+  Eigen::VectorXi nextMap;
   double value = 0.0, oppenentReward = 0.0;
 
-  mapEmptyIndex = checkEmptyState(actionMap);
+  nextMap.setZero(mapTotalCount_);
   nextStateType = checkTermination(actionMap);
+
   if(nextStateType != DotsAndBoxes::Type::KEEP_GO){  //Terminate when user finished game. give value because we should give value for next state and multiply discount factor
     return 0.0;
   }
@@ -508,8 +462,7 @@ double getOptimalValue(const Eigen::Vector<int, 12>& state){
 
   dotsAndBoxes.train();
 
-
-  return 0.0;  // return optimal value
+  return dotsAndBoxes.getValue(state);  // return optimal value
 }
 
 /// DO NOT CHANGE THE NAME AND FORMAT OF THIS FUNCTION
@@ -517,6 +470,9 @@ int getOptimalAction(const Eigen::Vector<int, 12>& state){
   // return one of the optimal actions given the state.
   // the action should be represented as a state index, at which a line will be drawn.
   /// TODO
+  DotsAndBoxes dotsAndBoxes(12);
 
-  return 0;  // return optimal action
+  dotsAndBoxes.train();
+
+  return dotsAndBoxes.getPolicy(state);  // return optimal action
 }
