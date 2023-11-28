@@ -19,6 +19,7 @@ class RaisimGymVecEnv:
         self.num_obs = self.wrapper.getObDim()
         self.num_acts = self.wrapper.getActionDim()
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
+        self._opponent_observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
         self.actions = np.zeros([self.num_envs, self.num_acts], dtype=np.float32)
         self.log_prob = np.zeros(self.num_envs, dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
@@ -44,8 +45,8 @@ class RaisimGymVecEnv:
     def stop_video_recording(self):
         self.wrapper.stopRecordingVideo()
 
-    def step(self, action):
-        self.wrapper.step(action, self._reward, self._done)
+    def step(self, action, opponent_action):
+        self.wrapper.step(action, opponent_action, self._reward, self._done)
         return self._reward.copy(), self._done.copy()
 
     def load_scaling(self, dir_name, iteration, count=1e5):
@@ -64,8 +65,8 @@ class RaisimGymVecEnv:
         np.savetxt(var_file_name, self.var)
 
     def observe(self, update_statistics=True):
-        self.wrapper.observe(self._observation, update_statistics)
-        return self._observation
+        self.wrapper.observe(self._observation, self._opponent_observation, update_statistics)
+        return self._observation, self._opponent_observation
 
     def get_reward_info(self):
         return self.wrapper.getRewardInfo()

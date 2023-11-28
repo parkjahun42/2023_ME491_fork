@@ -109,9 +109,10 @@ for update in range(1000000):
         for step in range(n_steps):
             with torch.no_grad():
                 frame_start = time.time()
-                obs = env.observe(False)
+                obs, opponent_obs = env.observe(False)
                 action = loaded_graph.architecture(torch.from_numpy(obs).cpu())
-                reward, dones = env.step(action.cpu().detach().numpy())
+                opponent_action = loaded_graph.architecture(torch.from_numpy(opponent_obs).cpu()).detach()
+                reward, dones = env.step(action.cpu().detach().numpy(), opponent_action.cpu().detach().numpy())
                 reward_analyzer.add_reward_info(env.get_reward_info())
                 frame_end = time.time()
                 wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
@@ -127,15 +128,16 @@ for update in range(1000000):
 
     # actual training
     for step in range(n_steps):
-        obs = env.observe()
+        obs, opponent_obs = env.observe()
         action = ppo.act(obs)
-        reward, dones = env.step(action)
+        opponent_action = ppo.act(opponent_obs)
+        reward, dones = env.step(action, opponent_action)
         ppo.step(value_obs=obs, rews=reward, dones=dones)
         done_sum = done_sum + np.sum(dones)
         reward_sum = reward_sum + np.sum(reward)
 
     # take st step to get value obs
-    obs = env.observe()
+    obs, opponent_obs = env.observe()
     ppo.update(actor_obs=obs, value_obs=obs, log_this_iteration=update % 10 == 0, update=update)
     average_ll_performance = reward_sum / total_steps
     average_dones = done_sum / total_steps
