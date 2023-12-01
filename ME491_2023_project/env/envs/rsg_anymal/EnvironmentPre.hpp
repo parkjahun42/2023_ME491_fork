@@ -63,7 +63,7 @@ class ENVIRONMENT {
 
   void reset() {
     if(controller_.isCageRadiusCurriculum) {
-      cage_radius_ = 2.0 + 1.0 * iter_ / 4000;
+      cage_radius_ = 2.0 + 1.0 * std::min(1.0, (double)(iter_ / 4000));
       controller_.setCageRadius(cage_radius_);
     }
     else cage_radius_ = 3.0;
@@ -142,7 +142,7 @@ class ENVIRONMENT {
 
  private:
   bool visualizable_ = false;
-  double terminalRewardCoeff_ = -10.;
+  double terminalRewardCoeff_ = -20.;
   PretrainingAnymalController_20233319 controller_;
   raisim::World world_;
   raisim::Reward rewards_;

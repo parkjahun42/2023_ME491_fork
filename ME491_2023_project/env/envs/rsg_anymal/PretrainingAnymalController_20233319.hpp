@@ -44,6 +44,7 @@ class PretrainingAnymalController_20233319 {
     opponent_gc_.setZero(gcDim_);
     opponent_gv_.setZero(gvDim_);
     opponent_gc_init_.setZero(gcDim_);
+    previous_opponent_gc_.setZero(gcDim_);
 
     cage2base_pos_xy_.setZero(2);
     opponent_cage2base_pos_xy_.setZero(2);
@@ -146,7 +147,9 @@ class PretrainingAnymalController_20233319 {
     box_->getLinearVelocity(opponent_linearVel);
     box_->getAngularVelocity(opponent_angularVel);
 
+    previous_opponent_gc_ = opponent_gc_;
     opponent_gc_.head(3) = opponent_pos.e();
+
 //    opponent_gc_.head(3) = box_->getPosition();
 
     opponent_rot = box_->getOrientation();
@@ -174,18 +177,18 @@ class PretrainingAnymalController_20233319 {
                  previousAction_, prepreviousAction_, /// previous action 24
                  cage2base_pos_xy_.norm(), /// cage2base xy position 1
 
-                  //opponent related data
-                  opponent_gc_.head(3) - gc_.head(3), /// Relative opponent player xyz position 3
-                  opponentLinearVel2Body_, /// opponent player linear velocity 3
-                  opponentAngularVel2Body_, /// opponent player angular velocity 3
-                  opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
-                  opponent_cage2base_pos_xy_.norm(),
-                  box_->getMass(); /// opponent cage2base xy position 1
+                //opponent related data
+                opponent_gc_.head(3) - gc_.head(3), /// Relative opponent player xyz position 3
+                opponentLinearVel2Body_, /// opponent player linear velocity 3
+                opponentAngularVel2Body_, /// opponent player angular velocity 3
+                opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
+                opponent_cage2base_pos_xy_.norm(),
+                box_->getMass(); /// opponent cage2base xy position 1
 
   }
 
   inline void recordReward(Reward *rewards) {
-    double poseError = (gc_.head(2) - opponent_gc_.head(2)).squaredNorm();
+    double poseError = (gc_.head(2) - opponent_gc_.head(2)).squaredNorm() / (gc_init_.head(2) - opponent_gc_init_.head(2)).squaredNorm();
 
     raisim::Vec<4> quat;
     raisim::Mat<3, 3> rot;
@@ -197,14 +200,16 @@ class PretrainingAnymalController_20233319 {
 
     Eigen::Vector3d targetVector = rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)) / (opponent_gc_.head(3) - gc_.head(3)).norm();
 
-    rewMove2Opponent_ = exp(-poseError / 0.25);
+    rewMove2Opponent_ = exp(poseError / 3) - 1;
     rewForwardVel_ = exp(-(bodyLinearVel_.head(2) - targetVector.head(2)).squaredNorm()*0.5 / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
     rewTorque_ = anymal_->getGeneralizedForce().squaredNorm();
     rewTakeGoodPose = std::max((cage2base_pos_xy_.norm() - opponent_cage2base_pos_xy_.norm()), 0.0);
-    rewOpponent2CageDist_ = ((opponent_cage2base_pos_xy_).norm()-opponent_gc_init_.head(2).norm());
+    rewOpponent2CageDist_ = ((opponent_cage2base_pos_xy_).norm()-previous_opponent_gc_.head(2).norm());
     rewPushOpponentOff_ = (opponent_gc_.head(2).norm() > cage_radius_) ? 1.0 : 0.0;
     rewBaseMotion_ = (0.8 * bodyLinearVel_[2] * bodyLinearVel_[2] + 0.2 * fabs(bodyAngularVel_[0]) + 0.2 * fabs(bodyAngularVel_[1]));
     rewJointPosition = (gc_.tail(nJoints_) - gc_init_.tail(nJoints_)).norm();
+
+
     //opponent_gc_init_.head(2) << opponent_cage2base_pos_xy_;
 
     rewards->record("forwardVel", rewForwardVel_);
@@ -275,8 +280,8 @@ class PretrainingAnymalController_20233319 {
     double radius = 1.5;
 //    box_->setPosition(0,0,0.5);
     if(isBoxPosCurriculum){
-      radius = 0.0 + cage_radius_ / 2 * iter_ / 1000;
-      box_->setMass(1.0 + 35.0 * iter_ / 10000);
+      radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / 2000)));
+      box_->setMass(5.0 + 30.0 * std::min(1.0, (double)(iter_ / 5000)));
     }
     else radius = 1.5;
     box_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.5);
@@ -312,7 +317,7 @@ class PretrainingAnymalController_20233319 {
   double torqueRewardCoeff_ = 0.;
 
   //opponent robot's data
-  Eigen::VectorXd opponent_gc_, opponent_gv_, opponent_gc_init_;
+  Eigen::VectorXd opponent_gc_, opponent_gv_, opponent_gc_init_, previous_opponent_gc_;
   Eigen::Vector3d opponent_bodyLinearVel_, opponent_bodyAngularVel_;
   Eigen::VectorXd opponent_cage2base_pos_xy_;
 

@@ -18,19 +18,19 @@ environment:
     forwardVel:
       coeff: 0.5
     move2Opponent:
-      coeff: 0.5
+      coeff: -0.3
     torque:
       coeff: -4e-7
     takeGoodPose:
       coeff: -0.01
     opponent2CageDist:
-      coeff: 0.5
+      coeff: 1.0
     pushOpponentOff:
       coeff: 20.0
     baseMotion:
-      coeff: -0.06
+      coeff: -0.15
     jointPosition:
-      coeff: -0.01
+      coeff: -0.1
 
 
 evaluation:
