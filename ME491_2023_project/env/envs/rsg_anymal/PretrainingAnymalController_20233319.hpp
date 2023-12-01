@@ -317,7 +317,7 @@ class PretrainingAnymalController_20233319 {
       if(prob > 0.5) radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
       else radius = 0.5 + uniDist_(gen_) * std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
 
-      box_->setMass(10.0 + 30.0 * std::min(1.0, (double)(iter_ / 3000)));
+      box_->setMass(10.0 + 30.0 * std::min(1.0, (double)(iter_ / boxMassCurriculumIter)));
     }
     else radius = 1.5;
     box_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.5);
@@ -336,8 +336,24 @@ class PretrainingAnymalController_20233319 {
       boxForce[0] = poseError(0);
       boxForce[1] = poseError(1);
       boxForce[2] = 0.0;
+
+      raisim::Vec<3> auxForce;
+      auxForce[0] = uniDist_(gen_);
+      auxForce[1] = uniDist_(gen_);
+      auxForce[2] = 0.0;
+
+      auxForce = auxForce / (auxForce.norm() + 1e-5);
+
+      boxForce = boxForce + auxForce * 0.5;;
+
+
+
 //      Eigen::Vector3d auxForce =
-      if(iter_ > 500) box_->setExternalForce(0, opponent_gc_.head(3), poseError * 5.0 * std::min(1.0, double((iter_-500))/2000) * box_->getMass());
+      if(iter_ > 300){
+        double prob = uniDist_(gen_);
+        if(prob > 0.5) box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 * std::min(2.0, double((iter_-300))/boxExternelForceCurriculumIter) * box_->getMass());
+        else box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 * uniDist_(gen_) * std::min(2.0, double((iter_-300))/boxExternelForceCurriculumIter) * box_->getMass());
+      }
 //      box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 *  box_->getMass());
 
   }
@@ -348,7 +364,9 @@ class PretrainingAnymalController_20233319 {
   bool isBoxPosCurriculum = true;
   bool isCageRadiusCurriculum = true;
 
-  int cageRadiusCurriculumIter = 2000;
+  int cageRadiusCurriculumIter = 1000;
+  int boxExternelForceCurriculumIter = 2000;
+  int boxMassCurriculumIter = 3000;
 
 
  private:
