@@ -30,12 +30,13 @@ class ENVIRONMENT {
       visualizable_(visualizable) {
     /// add objects
     auto* robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_blue.urdf");
-    auto* box = world_.addBox(0.6, 0.6, 0.7, 1.0);
+    auto* box = world_.addBox(0.7, 0.7, 0.7, 0.38);
     box->setName("opponent");
     robot->setName(PLAYER_NAME);
     controller_.setName(PLAYER_NAME);
 //    controller_.setBox(box);
     controller_.setCageRadius(cage_radius_);
+//    controller_.setCfg(cfg);
     robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
 
     auto* ground = world_.addGround();
@@ -63,7 +64,7 @@ class ENVIRONMENT {
 
   void reset() {
     if(controller_.isCageRadiusCurriculum) {
-      cage_radius_ = 2.0 + 1.0 * std::min(1.0, (double)(iter_ / 4000));
+      cage_radius_ = 2.0 + 1.0 * std::min(1.0, (double)(iter_ / controller_.cageRadiusCurriculumIter));
       controller_.setCageRadius(cage_radius_);
     }
     else cage_radius_ = 3.0;
@@ -142,7 +143,7 @@ class ENVIRONMENT {
 
  private:
   bool visualizable_ = false;
-  double terminalRewardCoeff_ = -20.;
+  double terminalRewardCoeff_ = -10.;
   PretrainingAnymalController_20233319 controller_;
   raisim::World world_;
   raisim::Reward rewards_;

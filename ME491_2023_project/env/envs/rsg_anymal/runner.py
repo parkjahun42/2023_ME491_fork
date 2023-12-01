@@ -114,7 +114,7 @@ for update in range(1000000):
         env.turn_on_visualization()
         env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
-        for step in range(n_steps*2):
+        for step in range(n_steps):
             with torch.no_grad():
                 frame_start = time.time()
                 if is_pretrain:

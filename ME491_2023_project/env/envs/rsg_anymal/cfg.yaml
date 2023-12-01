@@ -6,7 +6,7 @@ training:
 
 environment:
   render: True
-  num_envs: 100
+  num_envs: 400
   eval_every_n: 100
   analyze_freq: 50
   num_threads: 30
@@ -22,15 +22,15 @@ environment:
     torque:
       coeff: -4e-7
     takeGoodPose:
-      coeff: -0.01
+      coeff: -0.1
     opponent2CageDist:
-      coeff: 1.0
+      coeff: 5.0
     pushOpponentOff:
       coeff: 20.0
     baseMotion:
       coeff: -0.15
     jointPosition:
-      coeff: -0.1
+      coeff: -0.02
 
 
 evaluation:

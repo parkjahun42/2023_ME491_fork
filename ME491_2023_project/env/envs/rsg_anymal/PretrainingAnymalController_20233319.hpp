@@ -59,7 +59,7 @@ class PretrainingAnymalController_20233319 {
     anymal_->setGeneralizedForce(Eigen::VectorXd::Zero(gvDim_));
 
     /// MUST BE DONE FOR ALL ENVIRONMENTS
-    obDim_ = 73;
+    obDim_ = 74;
     actionDim_ = nJoints_;
     actionMean_.setZero(actionDim_);
     actionStd_.setZero(actionDim_);
@@ -93,6 +93,9 @@ class PretrainingAnymalController_20233319 {
     pTarget12_ += actionMean_;
     pTarget_.tail(nJoints_) = pTarget12_;
     anymal_->setPdTarget(pTarget_, vTarget_);
+
+    if(israndomizeBoxVelocity) randomizeBoxVelocity(world);
+
     return true;
   }
 
@@ -114,7 +117,7 @@ class PretrainingAnymalController_20233319 {
       box_->setOrientation(cos(theta / 2), 0, 0, sin(theta / 2));
       opponent_gc_init_.head(3) << 0,0,0;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
     }
-//    if(israndomizeBoxVelocity) randomizeBoxVelocity(world);
+    if(israndomizeBoxVelocity) randomizeBoxVelocity(world);
 
     anymal_->setState(gc_init_, gv_init_);
 
@@ -178,12 +181,16 @@ class PretrainingAnymalController_20233319 {
                  cage2base_pos_xy_.norm(), /// cage2base xy position 1
 
                 //opponent related data
-                opponent_gc_.head(3) - gc_.head(3), /// Relative opponent player xyz position 3
+                rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)), /// Relative opponent player xyz position 3
                 opponentLinearVel2Body_, /// opponent player linear velocity 3
                 opponentAngularVel2Body_, /// opponent player angular velocity 3
                 opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
                 opponent_cage2base_pos_xy_.norm(),
-                box_->getMass(); /// opponent cage2base xy position 1
+                box_->getMass(), /// opponent cage2base xy position 1
+
+                cage_radius_; /// cage radius 1
+
+
 
   }
 
@@ -201,10 +208,10 @@ class PretrainingAnymalController_20233319 {
     Eigen::Vector3d targetVector = rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)) / (opponent_gc_.head(3) - gc_.head(3)).norm();
 
     rewMove2Opponent_ = exp(poseError / 3) - 1;
-    rewForwardVel_ = exp(-(bodyLinearVel_.head(2) - targetVector.head(2)).squaredNorm()*0.5 / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
+    rewForwardVel_ = exp(-(bodyLinearVel_.head(3) / (bodyLinearVel_.head(3).norm() + 1e-5) - targetVector.head(2)).squaredNorm()*0.5 / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
     rewTorque_ = anymal_->getGeneralizedForce().squaredNorm();
     rewTakeGoodPose = std::max((cage2base_pos_xy_.norm() - opponent_cage2base_pos_xy_.norm()), 0.0);
-    rewOpponent2CageDist_ = ((opponent_cage2base_pos_xy_).norm()-previous_opponent_gc_.head(2).norm());
+    rewOpponent2CageDist_ = std::max(0.0, (opponent_cage2base_pos_xy_).norm()-opponent_gc_init_.head(2).norm()) / (cage_radius_-opponent_gc_init_.head(2).norm());
     rewPushOpponentOff_ = (opponent_gc_.head(2).norm() > cage_radius_) ? 1.0 : 0.0;
     rewBaseMotion_ = (0.8 * bodyLinearVel_[2] * bodyLinearVel_[2] + 0.2 * fabs(bodyAngularVel_[0]) + 0.2 * fabs(bodyAngularVel_[1]));
     rewJointPosition = (gc_.tail(nJoints_) - gc_init_.tail(nJoints_)).norm();
@@ -226,6 +233,11 @@ class PretrainingAnymalController_20233319 {
   inline const Eigen::VectorXd &getObservation() {
     return obDouble_;
   }
+
+//  void setCfg(const Yaml::Node &cfg)
+//  {
+//    cfg_ = cfg;
+//  }
 
   void setName(const std::string &name) {
     name_ = name;
@@ -280,7 +292,11 @@ class PretrainingAnymalController_20233319 {
     double radius = 1.5;
 //    box_->setPosition(0,0,0.5);
     if(isBoxPosCurriculum){
-      radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / 2000)));
+      double prob = uniDist_(gen_);
+
+      if(prob > 0.5) radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
+      else radius = 0.5 + uniDist_(gen_) * std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
+
       box_->setMass(5.0 + 30.0 * std::min(1.0, (double)(iter_ / 5000)));
     }
     else radius = 1.5;
@@ -293,11 +309,27 @@ class PretrainingAnymalController_20233319 {
     iter_ = iter;
   }
 
+  void randomizeBoxVelocity(raisim::World *world){
+
+      Eigen::Vector3d poseError = (-opponent_gc_.head(3)) / ((opponent_gc_.head(3)).norm() + 1e-5);
+      raisim::Vec<3> boxForce;
+      boxForce[0] = poseError(0);
+      boxForce[1] = poseError(1);
+      boxForce[2] = 0.0;
+//      Eigen::Vector3d auxForce =
+      if(iter_ > 1000) box_->setExternalForce(0, opponent_gc_.head(3), poseError * 5.0 * std::min(1.0, double((iter_-1000))/3000) * box_->getMass());
+//      box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 *  box_->getMass());
+
+  }
+
     //RandomizeRelated
   bool israndomizeBoxPosition = true;
   bool israndomizeBoxVelocity = true;
   bool isBoxPosCurriculum = true;
   bool isCageRadiusCurriculum = true;
+
+  int cageRadiusCurriculumIter = 2000;
+
 
  private:
   std::string name_, opponentName_;
@@ -328,7 +360,7 @@ class PretrainingAnymalController_20233319 {
   double rewForwardVel_ = 0., rewMove2Opponent_ = 0., rewTorque_ = 0., rewTakeGoodPose = 0., rewOpponent2CageDist_ = 0., rewPushOpponentOff_ = 0., rewBaseMotion_=0.,
           rewJointPosition = 0.;
 
-
+//  Yaml::Node &cfg_;
 
   thread_local static std::uniform_real_distribution<double> uniDist_;
   thread_local static std::mt19937 gen_;
