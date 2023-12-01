@@ -36,6 +36,7 @@ class ENVIRONMENT {
     controller_.setName(PLAYER_NAME);
 //    controller_.setBox(box);
     controller_.setCageRadius(cage_radius_);
+
 //    controller_.setCfg(cfg);
     robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
 
@@ -45,7 +46,8 @@ class ENVIRONMENT {
     controller_.create(&world_);
     READ_YAML(double, simulation_dt_, cfg["simulation_dt"])
     READ_YAML(double, control_dt_, cfg["control_dt"])
-
+    READ_YAML(double, episode_time_, cfg["episode_time"])
+    controller_.setEpisodeTime(episode_time_);
     /// Reward coefficients
     rewards_.initializeFromConfigurationFile (cfg["reward"]);
 
@@ -81,6 +83,7 @@ class ENVIRONMENT {
       if (server_) server_->unlockVisualizationServerMutex();
     }
     controller_.updateObservation(&world_);
+    controller_.updateCurrentTime(control_dt_);
     controller_.recordReward(&rewards_);
     return rewards_.sum();
   }
@@ -97,7 +100,11 @@ class ENVIRONMENT {
       terminalReward = terminalRewardCoeff_;
       return true;
     }
-    else if(terminalState == 3) {
+    else if(terminalState == 3){
+      terminalReward = terminalRewardCoeff_ / 2;
+      return true;
+    }
+    else if(terminalState == 4) {
       terminalReward = 0.f;
       return true;
     }
@@ -149,6 +156,7 @@ class ENVIRONMENT {
   raisim::Reward rewards_;
   double simulation_dt_ = 0.001;
   double control_dt_ = 0.01;
+  double episode_time_ = 10.;
   std::unique_ptr<raisim::RaisimServer> server_;
   thread_local static std::uniform_real_distribution<double> uniDist_;
   thread_local static std::mt19937 gen_;

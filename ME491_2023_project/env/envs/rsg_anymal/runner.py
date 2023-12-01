@@ -79,7 +79,7 @@ ppo = PPO.PPO(actor=actor,
               num_envs=cfg['environment']['num_envs'],
               num_transitions_per_env=n_steps,
               num_learning_epochs=4,
-              gamma=0.95,
+              gamma=0.85,
               lam=0.95,
               num_mini_batches=4,
               device=device,
@@ -142,7 +142,7 @@ for update in range(1000000):
         env.save_scaling(saver.data_dir, str(update))
 
     # actual training
-    if update % 20 == 0:
+    if update % 20 < 2:
         env.turn_on_visualization()
     else:
         env.turn_off_visualization()

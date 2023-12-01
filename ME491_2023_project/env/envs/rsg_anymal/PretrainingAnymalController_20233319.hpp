@@ -121,6 +121,8 @@ class PretrainingAnymalController_20233319 {
 
     anymal_->setState(gc_init_, gv_init_);
 
+    currentTime_ = 0.;
+
 
     return true;
   }
@@ -213,9 +215,9 @@ class PretrainingAnymalController_20233319 {
     rewTakeGoodPose = std::max((cage2base_pos_xy_.norm() - opponent_cage2base_pos_xy_.norm()), 0.0);
     rewOpponent2CageDist_ = std::max(0.0, (opponent_cage2base_pos_xy_).norm()-opponent_gc_init_.head(2).norm()) / (cage_radius_-opponent_gc_init_.head(2).norm());
     rewPushOpponentOff_ = (opponent_gc_.head(2).norm() > cage_radius_) ? 1.0 : 0.0;
-    rewBaseMotion_ = (0.8 * bodyLinearVel_[2] * bodyLinearVel_[2] + 0.2 * fabs(bodyAngularVel_[0]) + 0.2 * fabs(bodyAngularVel_[1]));
+    rewBaseMotion_ = (0.8 * bodyLinearVel_[2] * bodyLinearVel_[2] + 0.4* fabs(bodyAngularVel_[0]) + 0.4 * fabs(bodyAngularVel_[1]));
     rewJointPosition = (gc_.tail(nJoints_) - gc_init_.tail(nJoints_)).norm();
-
+    rewBaseHeight = pow((gc_[2] - gc_init_[2]),2);
 
     //opponent_gc_init_.head(2) << opponent_cage2base_pos_xy_;
 
@@ -227,6 +229,7 @@ class PretrainingAnymalController_20233319 {
     rewards->record("pushOpponentOff", rewPushOpponentOff_);
     rewards->record("baseMotion", rewBaseMotion_);
     rewards->record("jointPosition", rewJointPosition);
+    rewards->record("baseHeight", rewBaseHeight);
 
   }
 
@@ -259,6 +262,14 @@ class PretrainingAnymalController_20233319 {
     cage_radius_ = cage_radius;
   }
 
+  void setEpisodeTime(const double &episodeTime){
+    episodeTime_ = episodeTime;
+  }
+
+  void updateCurrentTime(const double &controlTime){
+    currentTime_ += controlTime;
+  }
+
   inline int isTerminalState(raisim::World *world) {
     for (auto &contact: anymal_->getContacts()) {
       if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end() && contact.getPairObjectIndex() == world->getObject("ground")->getIndexInWorld()) {
@@ -272,8 +283,11 @@ class PretrainingAnymalController_20233319 {
     if (gc_.head(2).norm() > cage_radius_) {
       return 2;
     }
-    if(opponent_gc_.head(2).norm() > cage_radius_) {
+    if(checkTerminateEpisode()) {
       return 3;
+    }
+    if(opponent_gc_.head(2).norm() > cage_radius_) {
+      return 4;
     }
 
     return 0;
@@ -287,6 +301,12 @@ class PretrainingAnymalController_20233319 {
     return actionDim_;
   }
 
+  bool checkTerminateEpisode()
+  {
+    if(currentTime_ > episodeTime_) return true;
+    else return false;
+  }
+
   void randomizeBoxPosition(raisim::World *world,  double theta){
     auto oppositeAngle = (uniDist_(gen_) + 0.5) * M_PI;
     double radius = 1.5;
@@ -297,7 +317,7 @@ class PretrainingAnymalController_20233319 {
       if(prob > 0.5) radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
       else radius = 0.5 + uniDist_(gen_) * std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
 
-      box_->setMass(5.0 + 30.0 * std::min(1.0, (double)(iter_ / 5000)));
+      box_->setMass(10.0 + 30.0 * std::min(1.0, (double)(iter_ / 3000)));
     }
     else radius = 1.5;
     box_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.5);
@@ -317,7 +337,7 @@ class PretrainingAnymalController_20233319 {
       boxForce[1] = poseError(1);
       boxForce[2] = 0.0;
 //      Eigen::Vector3d auxForce =
-      if(iter_ > 1000) box_->setExternalForce(0, opponent_gc_.head(3), poseError * 5.0 * std::min(1.0, double((iter_-1000))/3000) * box_->getMass());
+      if(iter_ > 500) box_->setExternalForce(0, opponent_gc_.head(3), poseError * 5.0 * std::min(1.0, double((iter_-500))/2000) * box_->getMass());
 //      box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 *  box_->getMass());
 
   }
@@ -355,10 +375,13 @@ class PretrainingAnymalController_20233319 {
 
   //Train Related
   int iter_ = 0;
+  double episodeTime_ = 10.0;
+  double controlTime_ = 0.01;
+  double currentTime_ = 0.0;
 
   //RewardRelated
   double rewForwardVel_ = 0., rewMove2Opponent_ = 0., rewTorque_ = 0., rewTakeGoodPose = 0., rewOpponent2CageDist_ = 0., rewPushOpponentOff_ = 0., rewBaseMotion_=0.,
-          rewJointPosition = 0.;
+          rewJointPosition = 0., rewBaseHeight=0.;
 
 //  Yaml::Node &cfg_;
 
