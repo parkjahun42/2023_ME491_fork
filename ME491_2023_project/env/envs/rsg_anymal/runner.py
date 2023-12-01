@@ -1,5 +1,6 @@
 from ruamel.yaml import YAML, dump, RoundTripDumper
 from ME491_2023_project.env.RaisimGymVecEnv import RaisimGymVecEnv as VecEnv
+from ME491_2023_project.env.RaisimGymVecEnvPre import RaisimGymVecEnvPre as VecEnvPre
 from ME491_2023_project.helper.raisim_gym_helper import ConfigurationSaver, load_param, tensorboard_launcher
 from ME491_2023_project.env.bin.rsg_anymal import NormalSampler
 from ME491_2023_project.env.bin.rsg_anymal import RaisimGymEnv
@@ -37,8 +38,13 @@ home_path = task_path + "/../../../.."
 # config
 cfg = YAML().load(open(task_path + "/cfg.yaml", 'r'))
 
+is_pretrain = cfg['training']['is_pretrain']
+
 # create environment from the configuration file
-env = VecEnv(RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)))
+if is_pretrain:
+    env = VecEnvPre(RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)))
+else:
+    env = VecEnv(RaisimGymEnv(home_path + "/rsc", dump(cfg['environment'], Dumper=RoundTripDumper)))
 env.seed(cfg['seed'])
 
 # shortcuts
@@ -49,6 +55,8 @@ num_threads = cfg['environment']['num_threads']
 # Training
 n_steps = math.floor(cfg['environment']['max_time'] / cfg['environment']['control_dt'])
 total_steps = n_steps * env.num_envs
+
+
 
 avg_rewards = []
 
@@ -71,7 +79,7 @@ ppo = PPO.PPO(actor=actor,
               num_envs=cfg['environment']['num_envs'],
               num_transitions_per_env=n_steps,
               num_learning_epochs=4,
-              gamma=0.998,
+              gamma=0.95,
               lam=0.95,
               num_mini_batches=4,
               device=device,
@@ -86,12 +94,12 @@ if mode == 'retrain':
 
 for update in range(1000000):
     start = time.time()
-    env.reset()
     reward_sum = 0
     done_sum = 0
     average_dones = 0.
 
     if update % cfg['environment']['eval_every_n'] == 0:
+        env.reset()
         print("Visualizing and evaluating the current policy")
         torch.save({
             'actor_architecture_state_dict': actor.architecture.state_dict(),
@@ -106,14 +114,21 @@ for update in range(1000000):
         env.turn_on_visualization()
         env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
-        for step in range(n_steps):
+        for step in range(n_steps*2):
             with torch.no_grad():
                 frame_start = time.time()
-                obs, opponent_obs = env.observe(False)
-                action = loaded_graph.architecture(torch.from_numpy(obs).cpu())
-                opponent_action = loaded_graph.architecture(torch.from_numpy(opponent_obs).cpu()).detach()
-                reward, dones = env.step(action.cpu().detach().numpy(), opponent_action.cpu().detach().numpy())
-                reward_analyzer.add_reward_info(env.get_reward_info())
+                if is_pretrain:
+                    obs = env.observe(False)
+                    action = loaded_graph.architecture(torch.from_numpy(obs).cpu()).detach()
+                    reward, dones = env.step(action.cpu().detach().numpy())
+                else:
+                    obs, opponent_obs = env.observe(False)
+                    action = loaded_graph.architecture(torch.from_numpy(obs).cpu())
+                    opponent_action = loaded_graph.architecture(torch.from_numpy(opponent_obs).cpu()).detach()
+                    reward, dones = env.step(action.cpu().detach().numpy(), opponent_action.cpu().detach().numpy())
+
+
+                # reward_analyzer.add_reward_info(env.get_reward_info())
                 frame_end = time.time()
                 wait_time = cfg['environment']['control_dt'] - (frame_end-frame_start)
                 if wait_time > 0.:
@@ -122,22 +137,42 @@ for update in range(1000000):
         env.stop_video_recording()
         env.turn_off_visualization()
 
-        reward_analyzer.analyze_and_plot(update)
+        # reward_analyzer.analyze_and_plot(update)
         env.reset()
         env.save_scaling(saver.data_dir, str(update))
 
     # actual training
+    if update % 20 == 0:
+        env.turn_on_visualization()
+    else:
+        env.turn_off_visualization()
     for step in range(n_steps):
-        obs, opponent_obs = env.observe()
-        action = ppo.act(obs)
-        opponent_action = ppo.act(opponent_obs)
-        reward, dones = env.step(action, opponent_action)
+        if is_pretrain:
+            obs = env.observe()
+            action = ppo.act(obs)
+            # opponent_action = ppo.act(opponent_obs)
+            reward, dones = env.step(action)
+        else:
+            obs, opponent_obs = env.observe()
+            action = ppo.act(obs)
+            opponent_action = ppo.act(opponent_obs)
+            reward, dones = env.step(action, opponent_action)
+
+        if update % cfg['environment']['analyze_freq'] == 0:
+            reward_analyzer.add_reward_info(env.get_reward_info())
+
         ppo.step(value_obs=obs, rews=reward, dones=dones)
         done_sum = done_sum + np.sum(dones)
         reward_sum = reward_sum + np.sum(reward)
 
+    if update % cfg['environment']['analyze_freq'] == 0:
+        reward_analyzer.analyze_and_plot(update)
+
     # take st step to get value obs
-    obs, opponent_obs = env.observe()
+    if is_pretrain:
+        obs = env.observe()
+    else:
+        obs, opponent_obs = env.observe()
     ppo.update(actor_obs=obs, value_obs=obs, log_this_iteration=update % 10 == 0, update=update)
     average_ll_performance = reward_sum / total_steps
     average_dones = done_sum / total_steps
@@ -147,9 +182,10 @@ for update in range(1000000):
     actor.distribution.enforce_minimum_std((torch.ones(12)*0.2).to(device))
 
     # curriculum update. Implement it in Environment.hpp
-    env.curriculum_callback()
+    env.curriculum_callback(update)
 
     end = time.time()
+
 
     print('----------------------------------------------------')
     print('{:>6}th iteration'.format(update))

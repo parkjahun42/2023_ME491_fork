@@ -61,7 +61,7 @@ class AnymalController_20233319 {
     anymal_->setGeneralizedForce(Eigen::VectorXd::Zero(gvDim_));
 
     /// MUST BE DONE FOR ALL ENVIRONMENTS
-    obDim_ = 34;
+    obDim_ = 58;
     actionDim_ = nJoints_;
     actionMean_.setZero(actionDim_);
     actionStd_.setZero(actionDim_);
@@ -125,7 +125,9 @@ class AnymalController_20233319 {
     bodyAngularVel_ = rot.e().transpose() * gv_.segment(3, 3);
 
     //update cage's data
-//    cage2base_pos_xy_ = gc_.head(2) - cage_->getPosition().head(2);
+    Eigen::Vector3d cage2base_pos_;
+    cage2base_pos_ = gc_.head(3) - cage_->getPosition();
+    cage2base_pos_xy_ = cage2base_pos_.head(2);
 
     //update opponent robot's data
     opponent_anymal_->getState(opponent_gc_, opponent_gv_);
@@ -140,14 +142,14 @@ class AnymalController_20233319 {
     opponent_bodyAngularVel_ = opponent_rot.e().transpose() * opponent_gv_.segment(3, 3);
 
     //update opponent cage's data
-//    opponent_cage2base_pos_xy_ = opponent_gc_.head(2) - cage_->getPosition().head(2);
+    opponent_cage2base_pos_xy_ = opponent_gc_.head(2) - cage_->getPosition().head(2);
 
     obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
                  gc_[2], /// body pose 1
                  rot.e().row(2).transpose(), /// body orientation 3
                  gc_.tail(12), /// joint angles 12
-                 gv_.tail(12); /// joint velocity 12
-//                 previousAction_, prepreviousAction_, /// previous action 24
+                 gv_.tail(12), /// joint velocity 12
+                 previousAction_, prepreviousAction_; /// previous action 24
 //                 cage2base_pos_xy_; /// cage2base xy position 2
   }
 
@@ -258,7 +260,7 @@ class OpponentController_20233319 {
     anymal_->setGeneralizedForce(Eigen::VectorXd::Zero(gvDim_));
 
     /// MUST BE DONE FOR ALL ENVIRONMENTS
-    obDim_ = 34;
+    obDim_ = 58;
     actionDim_ = nJoints_;
     actionMean_.setZero(actionDim_);
     actionStd_.setZero(actionDim_);
@@ -291,7 +293,8 @@ class OpponentController_20233319 {
     pTarget12_ = action.cast<double>();
     pTarget12_ = pTarget12_.cwiseProduct(actionStd_);
     pTarget12_ += actionMean_;
-    pTarget_.tail(nJoints_) = pTarget12_;
+//    pTarget_.tail(nJoints_) = pTarget12_;
+    pTarget_.tail(nJoints_) = gc_init_.tail(nJoints_);
     anymal_->setPdTarget(pTarget_, vTarget_);
     return true;
   }
@@ -343,8 +346,8 @@ class OpponentController_20233319 {
                  gc_[2], /// body pose 1
                  rot.e().row(2).transpose(), /// body orientation 3
                  gc_.tail(12), /// joint angles 12
-                 gv_.tail(12); /// joint velocity 12
-//                 previousAction_, prepreviousAction_, /// previous action 24
+                 gv_.tail(12), /// joint velocity 12
+                 previousAction_, prepreviousAction_; /// previous action 24
 //                 cage2base_pos_xy_; /// cage2base xy position 2
   }
 

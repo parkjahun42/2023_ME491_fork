@@ -7,8 +7,10 @@
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
 
-#include "Environment.hpp"
-#include "VectorizedEnvironment.hpp"
+#include "EnvironmentPre.hpp"
+#include "VectorizedEnvironmentPre.hpp"
+
+
 
 namespace py = pybind11;
 using namespace raisim;

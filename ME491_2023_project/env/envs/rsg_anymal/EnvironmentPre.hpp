@@ -18,7 +18,7 @@
 #include "../../BasicEigenTypes.hpp"
 #include "../../Reward.hpp"
 
-#include TRAINING_HEADER_FILE_TO_INCLUDE
+#include "PretrainingAnymalController_20233319.hpp"
 
 namespace raisim {
 
@@ -30,23 +30,18 @@ class ENVIRONMENT {
       visualizable_(visualizable) {
     /// add objects
     auto* robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_blue.urdf");
+    auto* box = world_.addBox(0.6, 0.6, 0.7, 1.0);
+    box->setName("opponent");
     robot->setName(PLAYER_NAME);
     controller_.setName(PLAYER_NAME);
-    controller_.setOpponentName("opponent");
-    controller_.setPlayerNum(0);
+//    controller_.setBox(box);
+    controller_.setCageRadius(cage_radius_);
     robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
 
-    auto* opponent_robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_red.urdf");
-    opponent_robot->setName("opponent");
-    opponent_controller_.setName("opponent");
-    opponent_controller_.setOpponentName(PLAYER_NAME);
-    opponent_controller_.setPlayerNum(1);
-    opponent_robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
-
-    world_.addGround();
+    auto* ground = world_.addGround();
+    ground->setName("ground");
 
     controller_.create(&world_);
-    opponent_controller_.create(&world_);
     READ_YAML(double, simulation_dt_, cfg["simulation_dt"])
     READ_YAML(double, control_dt_, cfg["control_dt"])
 
@@ -58,22 +53,27 @@ class ENVIRONMENT {
       server_ = std::make_unique<raisim::RaisimServer>(&world_);
       server_->launchServer();
       server_->focusOn(robot);
-      auto* cage = server_->addVisualCylinder("cage", 10.0, 0.05);
-      cage->setPosition(0,0,0);
+      cage_ = server_->addVisualCylinder("cage", cage_radius_, 0.05);
+      cage_->setPosition(0,0,0);
+      cage_->setCylinderSize(cage_radius_, 0.05);
     }
   }
 
   void init() {}
 
   void reset() {
+    if(controller_.isCageRadiusCurriculum) {
+      cage_radius_ = 2.0 + 1.0 * iter_ / 4000;
+      controller_.setCageRadius(cage_radius_);
+    }
+    else cage_radius_ = 3.0;
+
     auto theta = uniDist_(gen_) * 2 * M_PI;
     controller_.reset(&world_, theta);
-    opponent_controller_.reset(&world_, theta);
   }
 
-  float step(const Eigen::Ref<EigenVec> &action, const Eigen::Ref<EigenVec> &opponent_action) {
+  float step(const Eigen::Ref<EigenVec> &action) {
     controller_.advance(&world_, action);
-    opponent_controller_.advance(&world_, opponent_action);
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
       if (server_) server_->lockVisualizationServerMutex();
       world_.integrate();
@@ -81,28 +81,34 @@ class ENVIRONMENT {
     }
     controller_.updateObservation(&world_);
     controller_.recordReward(&rewards_);
-    opponent_controller_.updateObservation(&world_);
-     return rewards_.sum();
+    return rewards_.sum();
   }
 
-  //TODO: modify observe and isTerminalState function
-  void observe(Eigen::Ref<EigenVec> ob, Eigen::Ref<EigenVec> opponent_ob) {
+  void observe(Eigen::Ref<EigenVec> ob) {
     controller_.updateObservation(&world_);
-    opponent_controller_.updateObservation(&world_);
     ob = controller_.getObservation().cast<float>();
-    opponent_ob = opponent_controller_.getObservation().cast<float>();
   }
 
   bool isTerminalState(float &terminalReward) {
-    if(controller_.isTerminalState(&world_)) {
+    int terminalState = controller_.isTerminalState(&world_);
+
+    if(terminalState == 1 || terminalState == 2) {
       terminalReward = terminalRewardCoeff_;
       return true;
     }
+    else if(terminalState == 3) {
+      terminalReward = 0.f;
+      return true;
+    }
+
     terminalReward = 0.f;
     return false;
   }
 
-  void curriculumUpdate() {};
+  void curriculumUpdate(int iter) {
+    iter_ = iter;
+    controller_.curriculumUpdate(iter_);
+  };
 
   void close() { if (server_) server_->killServer(); };
 
@@ -137,8 +143,7 @@ class ENVIRONMENT {
  private:
   bool visualizable_ = false;
   double terminalRewardCoeff_ = -10.;
-  TRAINING_CONTROLLER controller_;
-  OpponentController_20233319 opponent_controller_;
+  PretrainingAnymalController_20233319 controller_;
   raisim::World world_;
   raisim::Reward rewards_;
   double simulation_dt_ = 0.001;
@@ -146,6 +151,12 @@ class ENVIRONMENT {
   std::unique_ptr<raisim::RaisimServer> server_;
   thread_local static std::uniform_real_distribution<double> uniDist_;
   thread_local static std::mt19937 gen_;
+
+  raisim::Visuals *cage_;
+
+  double cage_radius_ = 3.0;
+  int iter_ = 0;
+
 };
 thread_local std::mt19937 raisim::ENVIRONMENT::gen_;
 thread_local std::uniform_real_distribution<double> raisim::ENVIRONMENT::uniDist_(0., 1.);

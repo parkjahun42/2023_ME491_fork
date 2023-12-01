@@ -3,8 +3,8 @@
 // Copyright 2020, RaiSim Tech//
 //----------------------------//
 
-#include "Environment.hpp"
-#include "VectorizedEnvironment.hpp"
+#include "EnvironmentPre.hpp"
+#include "VectorizedEnvironmentPre.hpp"
 
 int THREAD_COUNT = 1;
 
@@ -46,14 +46,16 @@ int main(int argc, char *argv[]) {
   action.setZero();
 
   Eigen::Ref<EigenRowMajorMat> ob_ref(observation), action_ref(action);
-  Eigen::Ref<EigenRowMajorMat> opponent_ob_ref(observation), opponent_action_ref(action);
+//  Eigen::Ref<EigenRowMajorMat> opponent_ob_ref(observation), opponent_action_ref(action);
   Eigen::Ref<EigenVec> reward_ref(reward);
   Eigen::Ref<EigenBoolVec> dones_ref(dones);
-
+  vecEnv.reset();
   for (int i = 0; i < 10; i++) {
-    vecEnv.reset();
-    vecEnv.observe(ob_ref, opponent_ob_ref, true);
-    vecEnv.step(action_ref, opponent_action_ref, reward_ref, dones_ref);
+
+    vecEnv.observe(ob_ref, true);
+    vecEnv.step(action_ref, reward_ref, dones_ref);
+//    vecEnv.observe(ob_ref, opponent_ob_ref, true);
+//    vecEnv.step(action_ref, opponent_action_ref, reward_ref, dones_ref);
   }
 
   return 0;
