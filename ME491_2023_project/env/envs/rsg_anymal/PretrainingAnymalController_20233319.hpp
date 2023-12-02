@@ -210,7 +210,7 @@ class PretrainingAnymalController_20233319 {
     Eigen::Vector3d targetVector = rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)) / (opponent_gc_.head(3) - gc_.head(3)).norm();
 
     rewMove2Opponent_ = exp(poseError / 3) - 1;
-    rewForwardVel_ = exp(-(bodyLinearVel_.head(3) / (bodyLinearVel_.head(3).norm() + 1e-5) - targetVector.head(2)).squaredNorm()*0.5 / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
+    rewForwardVel_ = exp(-(bodyLinearVel_.head(3) / (bodyLinearVel_.head(3).norm() + 1e-5) - targetVector.head(2)).squaredNorm()*1.0/ 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
     rewTorque_ = anymal_->getGeneralizedForce().squaredNorm();
     rewTakeGoodPose = std::max((cage2base_pos_xy_.norm() - opponent_cage2base_pos_xy_.norm()), 0.0);
     rewOpponent2CageDist_ = std::max(0.0, (opponent_cage2base_pos_xy_).norm()-opponent_gc_init_.head(2).norm()) / (cage_radius_-opponent_gc_init_.head(2).norm());
@@ -271,26 +271,31 @@ class PretrainingAnymalController_20233319 {
   }
 
   inline int isTerminalState(raisim::World *world) {
+    int terminalState = 0;
     for (auto &contact: anymal_->getContacts()) {
       if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end() && contact.getPairObjectIndex() == world->getObject("ground")->getIndexInWorld()) {
-        return 1;
+        terminalState = 1;
+        break;
       }
       if(contact.getPairObjectIndex() == world->getObject("ground")->getIndexInWorld() &&
           contact.getlocalBodyIndex() == anymal_->getBodyIdx("base")) {
-        return 1;
+        terminalState = 1;
+        break;
       }
     }
     if (gc_.head(2).norm() > cage_radius_) {
-      return 2;
+      terminalState = 2;
     }
-    if(checkTerminateEpisode()) {
-      return 3;
+    else if(checkTerminateEpisode()) {
+      terminalState = 3;
     }
-    if(opponent_gc_.head(2).norm() > cage_radius_) {
-      return 4;
+    else if(opponent_gc_.head(2).norm() > cage_radius_) {
+      terminalState = 4;
     }
 
-    return 0;
+    curriculumLevelUpdate(terminalState);
+
+    return terminalState;
   }
 
   inline int getObDim() {
@@ -314,19 +319,37 @@ class PretrainingAnymalController_20233319 {
     if(isBoxPosCurriculum){
       double prob = uniDist_(gen_);
 
-      if(prob > 0.5) radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
-      else radius = 0.5 + uniDist_(gen_) * std::min(1.0, (cage_radius_ / 2) * std::min(1.0, (double)(iter_ / cageRadiusCurriculumIter)));
+      if(prob > 0.5) radius = 0.5 + std::min(1.0, (cage_radius_ / 2) * std::min(1.0, ((double)iter_ / cageRadiusCurriculumIter)));
+      else radius = 0.5 + uniDist_(gen_) * std::min(1.0, (cage_radius_ / 2) * std::min(1.0, ((double)iter_ / cageRadiusCurriculumIter)));
 
-      box_->setMass(10.0 + 30.0 * std::min(1.0, (double)(iter_ / boxMassCurriculumIter)));
+//      box_->setMass(10.0 + 20.0 * std::min(1.0, ((double)iter_ / boxMassCurriculumIter)));
+      box_->setMass(10.0 + 20.0 * std::min(1.0 , ((double)curriculumLevel / 100.)));
     }
     else radius = 1.5;
-    box_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.5);
+    box_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38);
     box_->setOrientation(cos(theta / 2), 0, 0, sin(theta / 2));
-    opponent_gc_init_.head(3) << radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.0;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
+    opponent_gc_init_.head(3) << radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
   }
 
   void curriculumUpdate(int iter){
     iter_ = iter;
+  }
+
+  void curriculumLevelUpdate(int terminalState){
+    if((opponent_cage2base_pos_xy_.norm() - opponent_gc_init_.head(2).norm()) /(cage_radius_ - opponent_gc_init_.head(2).norm()) > 0.5) {
+      curriculumLevel += 1;
+    }
+    else{
+      curriculumLevel -= 1;
+    }
+    
+    if(curriculumLevel < 0) {
+      curriculumLevel = 0;
+    }
+    else if(curriculumLevel > 200){
+      curriculumLevel = uniDistInt_(gen_);
+    }
+
   }
 
   void randomizeBoxVelocity(raisim::World *world){
@@ -344,15 +367,13 @@ class PretrainingAnymalController_20233319 {
 
       auxForce = auxForce / (auxForce.norm() + 1e-5);
 
-      boxForce = boxForce + auxForce * 0.5;;
+      boxForce = (boxForce + auxForce * 0.8) / (boxForce + auxForce * 0.8).norm();;
 
 
 
 //      Eigen::Vector3d auxForce =
-      if(iter_ > 300){
-        double prob = uniDist_(gen_);
-        if(prob > 0.5) box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 * std::min(2.0, double((iter_-300))/boxExternelForceCurriculumIter) * box_->getMass());
-        else box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 * uniDist_(gen_) * std::min(2.0, double((iter_-300))/boxExternelForceCurriculumIter) * box_->getMass());
+      if(curriculumLevel > 100){
+        box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 2.0 * (curriculumLevel -100.) / 100. * box_->getMass());
       }
 //      box_->setExternalForce(0, opponent_gc_.head(3), boxForce * 5.0 *  box_->getMass());
 
@@ -364,9 +385,10 @@ class PretrainingAnymalController_20233319 {
   bool isBoxPosCurriculum = true;
   bool isCageRadiusCurriculum = true;
 
-  int cageRadiusCurriculumIter = 1000;
-  int boxExternelForceCurriculumIter = 2000;
-  int boxMassCurriculumIter = 3000;
+  double cageRadiusCurriculumIter = 1000.;
+  double boxExternelForceCurriculumIter = 2000.;
+  double boxMassCurriculumIter = 3000.;
+  int curriculumLevel = 0.;
 
 
  private:
@@ -404,8 +426,10 @@ class PretrainingAnymalController_20233319 {
 //  Yaml::Node &cfg_;
 
   thread_local static std::uniform_real_distribution<double> uniDist_;
+  thread_local static std::uniform_int_distribution<int> uniDistInt_;
   thread_local static std::mt19937 gen_;
 };
 thread_local std::mt19937 raisim::PretrainingAnymalController_20233319::gen_;
 thread_local std::uniform_real_distribution<double> raisim::PretrainingAnymalController_20233319::uniDist_(0., 1.);
+thread_local std::uniform_int_distribution<int> raisim::PretrainingAnymalController_20233319::uniDistInt_(100, 200);
 }

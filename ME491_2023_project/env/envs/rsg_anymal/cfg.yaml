@@ -6,7 +6,7 @@ training:
 
 environment:
   render: True
-  num_envs: 200
+  num_envs: 100
   eval_every_n: 100
   analyze_freq: 50
   num_threads: 60
@@ -27,11 +27,11 @@ environment:
     opponent2CageDist:
       coeff: 5.0
     pushOpponentOff:
-      coeff: 100.0
+      coeff: 10.0
     baseMotion:
       coeff: -0.1
     jointPosition:
-      coeff: -0.2
+      coeff: -0.02
     baseHeight:
       coeff: -0.02
 

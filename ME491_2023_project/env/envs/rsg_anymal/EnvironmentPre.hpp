@@ -66,7 +66,7 @@ class ENVIRONMENT {
 
   void reset() {
     if(controller_.isCageRadiusCurriculum) {
-      cage_radius_ = 2.0 + 1.0 * std::min(1.0, (double)(iter_ / controller_.cageRadiusCurriculumIter));
+      cage_radius_ = 2.0 + 1.0 * std::min(1.0, ((double)iter_ / (double)controller_.cageRadiusCurriculumIter));
       controller_.setCageRadius(cage_radius_);
     }
     else cage_radius_ = 3.0;

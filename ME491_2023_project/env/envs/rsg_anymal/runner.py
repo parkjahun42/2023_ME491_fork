@@ -69,9 +69,11 @@ actor = ppo_module.Actor(ppo_module.MLP(cfg['architecture']['policy_net'], nn.Le
                          device)
 critic = ppo_module.Critic(ppo_module.MLP(cfg['architecture']['value_net'], nn.LeakyReLU, ob_dim, 1),
                            device)
-
-saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/"+task_name,
-                           save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/Environment.hpp"])
+if is_pretrain:
+    saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/" + task_name, save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/EnvironmentPre.hpp"])
+else:
+    saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/"+task_name,
+                               save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/Environment.hpp"])
 tensorboard_launcher(saver.data_dir+"/..")  # press refresh (F5) after the first ppo update
 
 ppo = PPO.PPO(actor=actor,
@@ -114,7 +116,7 @@ for update in range(1000000):
         env.turn_on_visualization()
         env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
-        for step in range(n_steps):
+        for step in range(n_steps*2):
             with torch.no_grad():
                 frame_start = time.time()
                 if is_pretrain:
