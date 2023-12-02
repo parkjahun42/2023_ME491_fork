@@ -78,6 +78,10 @@ class ENVIRONMENT {
   float step(const Eigen::Ref<EigenVec> &action) {
     controller_.advance(&world_, action);
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
+
+      Eigen::Vector3d boxPos = controller_.box_->getPosition();
+      controller_.box_->setExternalForce(0, {boxPos(0), boxPos(1), 0.}, controller_.boxExternalForce_);
+
       if (server_) server_->lockVisualizationServerMutex();
       world_.integrate();
       if (server_) server_->unlockVisualizationServerMutex();

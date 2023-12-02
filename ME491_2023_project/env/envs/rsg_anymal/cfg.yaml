@@ -17,23 +17,25 @@ environment:
   action_std: 0.1
   reward:
     forwardVel:
-      coeff: 0.5
+      coeff: 0.2
     move2Opponent:
-      coeff: -0.3
-    torque:
-      coeff: -4e-7
-    takeGoodPose:
       coeff: -0.1
+    torque:
+      coeff: 0.0
+    takeGoodPose:
+      coeff: -0.01
     opponent2CageDist:
-      coeff: 5.0
+      coeff: 0.2
     pushOpponentOff:
       coeff: 10.0
     baseMotion:
-      coeff: -0.1
+      coeff: 0.0
     jointPosition:
-      coeff: -0.02
+      coeff: 0.0
     baseHeight:
-      coeff: -0.02
+      coeff: 0.0
+    curriculumLevel:
+      coeff: 1e-8
 
 
 evaluation:
