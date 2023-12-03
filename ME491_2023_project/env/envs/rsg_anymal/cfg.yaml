@@ -23,7 +23,7 @@ environment:
     torque:
       coeff: 0.0
     takeGoodPose:
-      coeff: -0.01
+      coeff: -0.4
     opponent2CageDist:
       coeff: 0.2
     pushOpponentOff:

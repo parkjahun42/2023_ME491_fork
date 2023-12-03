@@ -70,7 +70,7 @@ actor = ppo_module.Actor(ppo_module.MLP(cfg['architecture']['policy_net'], nn.Le
 critic = ppo_module.Critic(ppo_module.MLP(cfg['architecture']['value_net'], nn.LeakyReLU, ob_dim, 1),
                            device)
 if is_pretrain:
-    saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/" + task_name, save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/EnvironmentPre.hpp"])
+    saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/" + task_name, save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/EnvironmentPre.hpp", task_path + "/PretrainingAnymalController_20233319.hpp"])
 else:
     saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/"+task_name,
                                save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/Environment.hpp"])

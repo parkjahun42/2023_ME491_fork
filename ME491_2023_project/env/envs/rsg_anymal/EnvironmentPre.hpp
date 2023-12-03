@@ -31,9 +31,10 @@ class ENVIRONMENT {
     /// add objects
     auto* robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_blue.urdf");
     auto* box = world_.addBox(0.7, 0.7, 0.7, 0.38);
-    box->setName("opponent");
+    box->setName("opponent_" + std::to_string(controller_.curriculumLevel));
     robot->setName(PLAYER_NAME);
     controller_.setName(PLAYER_NAME);
+    controller_.setOpponentName(box->getName());
 //    controller_.setBox(box);
     controller_.setCageRadius(cage_radius_);
 

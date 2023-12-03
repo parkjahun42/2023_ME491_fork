@@ -21,7 +21,7 @@ class PretrainingAnymalController_20233319 {
   inline bool create(raisim::World *world) {
     anymal_ = reinterpret_cast<raisim::ArticulatedSystem *>(world->getObject(name_));
     cage_ = reinterpret_cast<raisim::Visuals *>(world->getObject("cage"));
-    box_ = reinterpret_cast<raisim::Box *>(world->getObject("opponent"));
+    box_ = reinterpret_cast<raisim::Box *>(world->getObject(opponentName_));
     /// get robot data
     gcDim_ = anymal_->getGeneralizedCoordinateDim();
     gvDim_ = anymal_->getDOF();
@@ -326,7 +326,7 @@ class PretrainingAnymalController_20233319 {
       else radius = 1.0 + uniDist_(gen_) * std::min(0.5, (cage_radius_ / 2) * std::min(1.0, ((double)iter_ / cageRadiusCurriculumIter)));
 
 //      box_->setMass(10.0 + 20.0 * std::min(1.0, ((double)iter_ / boxMassCurriculumIter)));
-      box_->setMass(10.0 + 20.0 * std::min(1.0 , ((double)curriculumLevel / 100.)));
+      box_->setMass(10.0 + 30.0 * std::min(1.0 , ((double)curriculumLevel / 100.)));
     }
     else radius = 1.5;
     box_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38);
@@ -350,9 +350,12 @@ class PretrainingAnymalController_20233319 {
     if(curriculumLevel < 0) {
       curriculumLevel = 0;
     }
-    else if(curriculumLevel > 200){
+    else if(curriculumLevel > 300){
       curriculumLevel = uniDistInt_(gen_);
     }
+
+    box_->setName("box_" + std::to_string(curriculumLevel));
+    setOpponentName(box_->getName());
 
   }
 
@@ -381,20 +384,32 @@ class PretrainingAnymalController_20233319 {
 
       shearForce = shearForce / (shearForce.norm() + 1e-5);
 
-      if(currentTime_ < 1e-5) shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+      if(currentTime_ < 1e-5){
+        externalForceCount=0;
+        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+        externalForceCount++;
+      }
+      else if(currentTime_ > 3.0 && externalForceCount == 1){
+        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+        externalForceCount++;
+      }
+      else if(currentTime_ > 8.0 && externalForceCount == 2){
+        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+        externalForceCount++;}
 
-      if(opponent_cage2base_pos_xy_.norm() > cage_radius_ * 0.9)
+
+      if(opponent_cage2base_pos_xy_.norm() > cage_radius_ * 0.85)
       {
-        boxForce = (boxForce * 0.8 + auxForce * 0.2 + shearForce) / (boxForce * 0.8 + auxForce * 0.2 + shearForce).norm();;
+        boxForce = (boxForce * 4.0 + auxForce * 0.2 + shearForce) / (boxForce * 2.0 + auxForce * 0.2 + shearForce).norm();;
       }
       else {
         double randRadialForce = uniDist_(gen_);
-        boxForce = (boxForce * (randRadialForce * 0.3 + 0.2) + auxForce * 0.2 + shearForce);
+        boxForce = (boxForce * (randRadialForce * 0.4 + 1.5) + auxForce * 0.2 + shearForce);
         boxForce = boxForce / (boxForce.norm() + 1e-5);
       }
 
       if(curriculumLevel > 100){
-        boxExternalForce_ = boxForce.e() * 5.0 * (curriculumLevel -100.) / 100. * box_->getMass();
+        boxExternalForce_ = boxForce.e() * 10.0 * ((double)(curriculumLevel) -100.) / 200. * box_->getMass();
       }
   }
 
@@ -411,6 +426,7 @@ class PretrainingAnymalController_20233319 {
 
   raisim::Box *box_;
   Eigen::Vector3d boxExternalForce_;
+  int externalForceCount = 0;
 
  private:
   std::string name_, opponentName_;

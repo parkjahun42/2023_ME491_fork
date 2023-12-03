@@ -31,13 +31,19 @@ class RewardAnalyzer:
         self.data_mean /= self.data_size
         data_std = np.sqrt((self.data_square_sum - self.data_size * self.data_mean * self.data_mean) / (self.data_size - 1 + 1e-16))
 
+        reward_sum = 0.0
+
         for data_id in range(len(self.data_tags)):
             self.writer.add_scalar(self.data_tags[data_id]+'/mean', self.data_mean[data_id], global_step=step)
             self.writer.add_scalar(self.data_tags[data_id]+'/std', data_std[data_id], global_step=step)
             self.writer.add_scalar(self.data_tags[data_id]+'/min', self.data_min[data_id], global_step=step)
             self.writer.add_scalar(self.data_tags[data_id]+'/max', self.data_max[data_id], global_step=step)
+            reward_sum += self.data_mean[data_id]
+
+        self.writer.add_scalar('Reward Sum', reward_sum, global_step=step)
 
         self.data_size = 0
+
         self.data_mean = np.zeros(shape=(len(self.data_tags), 1), dtype=np.double)
         self.data_square_sum = np.zeros(shape=(len(self.data_tags), 1), dtype=np.double)
         self.data_min = np.inf * np.ones(shape=(len(self.data_tags), 1), dtype=np.double)
