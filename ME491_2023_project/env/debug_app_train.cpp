@@ -47,13 +47,14 @@ int main(int argc, char *argv[]) {
   action.setZero();
 
   Eigen::Ref<EigenRowMajorMat> ob_ref(observation), action_ref(action);
-  Eigen::Ref<EigenRowMajorMat> opponent_ob_ref(observation), opponent_action_ref(action);
+  Eigen::Ref<EigenRowMajorMat> opponent_ob_ref(opponent_observation), opponent_action_ref(action);
   Eigen::Ref<EigenVec> reward_ref(reward);
   Eigen::Ref<EigenBoolVec> dones_ref(dones);
   vecEnv.reset();
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 1e5; i++) {
 
     vecEnv.observe(ob_ref, opponent_ob_ref, true);
+    std::cout << ob_ref << std::endl;
     vecEnv.step(action_ref, opponent_action_ref, reward_ref, dones_ref);
 //    vecEnv.observe(ob_ref, opponent_ob_ref, true);
 //    vecEnv.step(action_ref, opponent_action_ref, reward_ref, dones_ref);

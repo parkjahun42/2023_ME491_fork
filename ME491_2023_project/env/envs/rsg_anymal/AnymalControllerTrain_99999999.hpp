@@ -15,13 +15,13 @@
 namespace raisim {
 
 /// change the class name and file name ex) AnymalController_00000000 -> AnymalController_STUDENT_ID
-class PretrainingAnymalController_20233319 {
+class AnymalControllerTrain_99999999{
 
  public:
   inline bool create(raisim::World *world) {
     anymal_ = reinterpret_cast<raisim::ArticulatedSystem *>(world->getObject(name_));
     cage_ = reinterpret_cast<raisim::Visuals *>(world->getObject("cage"));
-    opponent_ = reinterpret_cast<raisim::Box *>(world->getObject(opponentName_));
+    opponent_ = reinterpret_cast<raisim::ArticulatedSystem *>(world->getObject(opponentName_));
     /// get robot data
     gcDim_ = anymal_->getGeneralizedCoordinateDim();
     gvDim_ = anymal_->getDOF();
@@ -44,7 +44,6 @@ class PretrainingAnymalController_20233319 {
     opponent_gc_.setZero(gcDim_);
     opponent_gv_.setZero(gvDim_);
     opponent_gc_init_.setZero(gcDim_);
-    previous_opponent_gc_.setZero(gcDim_);
 
     cage2base_pos_xy_.setZero(2);
     opponent_cage2base_pos_xy_.setZero(2);
@@ -75,6 +74,14 @@ class PretrainingAnymalController_20233319 {
     footIndices_.insert(anymal_->getBodyIdx("LH_SHANK"));
     footIndices_.insert(anymal_->getBodyIdx("RH_SHANK"));
 
+
+    // initialize opponent robot's data
+    cage2base_pos_xy_.setZero(2);
+    cage2base_pos_body_.setZero(3);
+    opponent_cage2base_pos_xy_.setZero(2);
+    globalCommandPoint.setZero(3);
+    bodyCommandPoint.setZero(3);
+
     return true;
   }
 
@@ -92,7 +99,12 @@ class PretrainingAnymalController_20233319 {
     pTarget12_ = pTarget12_.cwiseProduct(actionStd_);
     pTarget12_ += actionMean_;
     pTarget_.tail(nJoints_) = pTarget12_;
+
+//    if(opponent_mode_ == 0) pTarget_.tail(nJoints_) = actionMean_;
+    pTarget_.tail(nJoints_) = actionMean_;
+
     anymal_->setPdTarget(pTarget_, vTarget_);
+//    opponent_->setP..   dTarget(actionMean_, vTarget_);
 
     if(israndomizeBoxVelocity) randomizeBoxVelocity(world);
 
@@ -102,6 +114,8 @@ class PretrainingAnymalController_20233319 {
   inline bool reset(raisim::World *world, double theta) {
 
     curriculumLevelUpdate();
+    previousAction_.setZero();
+    prepreviousAction_.setZero();
 
     currentTime_ = 0.;
     boxExternalForce_.setZero();
@@ -109,19 +123,18 @@ class PretrainingAnymalController_20233319 {
     if (playerNum_ == 0) {
       gc_init_.head(3) << cage_radius_ / 2 * std::cos(theta), cage_radius_ / 2 * std::sin(theta), 0.5;
       gc_init_.segment(3, 4) << cos((theta - M_PI) / 2), 0, 0, sin((theta - M_PI) / 2);
+//      opponent_gc_init_.head(3) << 1.5 * std::cos(theta + M_PI), 1.5 * std::sin(theta + M_PI), 0.5;
+//      opponent_gc_init_.segment(3, 4) << cos(theta / 2), 0, 0, sin(theta / 2);
     }
     else {
       gc_init_.head(3) << 1.5 * std::cos(theta + M_PI), 1.5 * std::sin(theta + M_PI), 0.5;
       gc_init_.segment(3, 4) << cos(theta / 2), 0, 0, sin(theta / 2);
+//      opponent_gc_init_.head(3) << cage_radius_ / 2 * std::cos(theta), cage_radius_ / 2 * std::sin(theta), 0.5;
+//      opponent_gc_init_.segment(3, 4) << cos((theta - M_PI) / 2), 0, 0, sin((theta - M_PI) / 2);
     }
 
     if(israndomizeBoxPosition) randomizeBoxPosition(world, theta);
-    else{
-      opponent_->setPosition(0,0,0.5);
-      //    opponent_->setPosition(1.5 * std::cos(theta + M_PI), 1.5 * std::sin(theta + M_PI), 0.5);
-      opponent_->setOrientation(cos(theta / 2), 0, 0, sin(theta / 2));
-      opponent_gc_init_.head(3) << 0,0,0;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
-    }
+
     if(israndomizeBoxVelocity) randomizeBoxVelocity(world);
 
     anymal_->setState(gc_init_, gv_init_);
@@ -144,37 +157,38 @@ class PretrainingAnymalController_20233319 {
     //update cage's data
     Eigen::Vector3d cage2base_pos_;
     cage2base_pos_ = gc_.head(3);
+    cage2base_pos_body_ = rot.e().transpose() * (gc_.head(3));
     cage2base_pos_xy_ = cage2base_pos_.head(2);
 
     //update opponent robot's data
     raisim::Mat<3, 3> opponent_rot;
     raisim::Vec<3> opponent_pos, opponent_linearVel, opponent_angularVel;
     Eigen::Vector3d opponentLinearVel2Body_, opponentAngularVel2Body_;
-    opponent_->getPosition(opponent_pos);
-    opponent_->getLinearVelocity(opponent_linearVel);
-    opponent_->getAngularVelocity(opponent_angularVel);
 
-    previous_opponent_gc_ = opponent_gc_;
-    opponent_gc_.head(3) = opponent_pos.e();
+    opponent_->getState(opponent_gc_, opponent_gv_);
+    raisim::Vec<4> opponent_quat;
+    opponent_quat[0] = opponent_gc_[3];
+    opponent_quat[1] = opponent_gc_[4];
+    opponent_quat[2] = opponent_gc_[5];
+    opponent_quat[3] = opponent_gc_[6];
+    raisim::quatToRotMat(opponent_quat, opponent_rot);
+    opponentLinearVel2Body_ = opponent_rot.e().transpose() * opponent_gv_.segment(0, 3);
+    opponentAngularVel2Body_ = opponent_rot.e().transpose() * opponent_gv_.segment(3, 3);
 
-//    opponent_gc_.head(3) = opponent_->getPosition();
-
-    opponent_rot = opponent_->getOrientation();
-    opponentLinearVel2Body_ =  rot.e().transpose() * opponent_linearVel.e();
-    opponentAngularVel2Body_ = rot.e().transpose() * opponent_angularVel.e();
-
-//    anymal_->getContacts()
-
-
-//    raisim::Vec<4> opponent_quat;
-
-//    opponent_quat[0] = opponent_gc_[3];
-//    opponent_quat[1] = opponent_gc_[4];
-//    opponent_quat[2] = opponent_gc_[5];
-//    opponent_quat[3] = opponent_gc_[6];
+//    opponent_->getPosition(opponent_pos);
+//    opponent_->getLinearVelocity(opponent_linearVel);
+//    opponent_->getAngularVelocity(opponent_angularVel);
+//    opponent_rot = opponent_->getOrientation();
+//
+//    opponent_gc_.head(3) = opponent_pos.e();
+//    opponentLinearVel2Body_ =  rot.e().transpose() * opponent_linearVel.e();
+//    opponentAngularVel2Body_ = rot.e().transpose() * opponent_angularVel.e();
 
     //update opponent cage's data
     opponent_cage2base_pos_xy_ = opponent_gc_.head(2);
+
+    bodyCommandPoint = rot.e().transpose() * (globalCommandPoint - gc_.head(3));
+
 
     obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
                  gc_[2], /// body pose 1
@@ -190,9 +204,20 @@ class PretrainingAnymalController_20233319 {
                 opponentAngularVel2Body_, /// opponent player angular velocity 3
                 opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
                 opponent_cage2base_pos_xy_.norm(),
-                opponent_->getMass(), /// opponent cage2base xy position 1
+                40.0, /// opponent cage2base xy position 1
 
-                cage_radius_; /// cage radius 1
+                cage_radius_;
+
+//                bodyCommandPoint,
+//               bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
+//               gc_[2], /// body pose 1
+//               rot.e().row(2).transpose(), /// body orientation 3
+//               gc_.tail(12), /// joint angles 12
+//               gv_.tail(12), /// joint velocity 12
+//               previousAction_, prepreviousAction_, /// previous action 24
+//               cage2base_pos_body_.head(2), /// cage2base xy position in body frame 2
+//               cage2base_pos_xy_.norm(), /// cage2base xy position 1
+//               cage_radius_; /// cage radius 1
 
 
 
@@ -253,12 +278,16 @@ class PretrainingAnymalController_20233319 {
     opponentName_ = name;
   }
 
-  void setBox(raisim::Box *box) {
-    opponent_ = box;
-  }
+//  void setBox(raisim::Box *box) {
+//    opponent_ = box;
+//  }
 
   void setPlayerNum(const int &playerNum) {
     playerNum_ = playerNum;
+  }
+
+  void isOpponentAnymal(const bool isOpponentAnymal){
+    isOpponentAnymal_ = isOpponentAnymal;
   }
 
   void setCageRadius(const double &cage_radius) {
@@ -309,6 +338,14 @@ class PretrainingAnymalController_20233319 {
     return actionDim_;
   }
 
+  Eigen::VectorXd& getGcInit(){
+    return gc_init_;
+  }
+
+  void setOpponentGcInit(Eigen::VectorXd &opponent_gc_init){
+    opponent_gc_init_ = opponent_gc_init;
+  }
+
   bool checkTerminateEpisode()
   {
     if(currentTime_ > episodeTime_) return true;
@@ -316,7 +353,7 @@ class PretrainingAnymalController_20233319 {
   }
 
   void randomizeBoxPosition(raisim::World *world,  double theta){
-    auto oppositeAngle = uniDistCage_(gen_) * M_PI;
+    auto angle = uniDistCage_(gen_) * M_PI;
     double radius = 1.5;
 //    opponent_->setPosition(0,0,0.5);
     if(isBoxPosCurriculum){
@@ -324,14 +361,14 @@ class PretrainingAnymalController_20233319 {
 
       if(prob > 0.5) radius = 1.0 + std::min(0.5, (cage_radius_ / 2) * std::min(1.0, ((double)iter_ / cageRadiusCurriculumIter)));
       else radius = 1.0 + uniDist_(gen_) * std::min(0.5, (cage_radius_ / 2) * std::min(1.0, ((double)iter_ / cageRadiusCurriculumIter)));
-
-//      opponent_->setMass(10.0 + 20.0 * std::min(1.0, ((double)iter_ / boxMassCurriculumIter)));
-      opponent_->setMass(10.0 + 30.0 * std::min(1.0 , ((double)curriculumLevel / 100.)));
+//      opponent_->setMass(10.0 + 30.0 * std::min(1.0 , ((double)curriculumLevel / 100.)));
     }
     else radius = 1.5;
-    opponent_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38);
-    opponent_->setOrientation(cos(theta / 2), 0, 0, sin(theta / 2));
-    opponent_gc_init_.head(3) << radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
+    gc_init_.head(3) << radius * std::cos(theta + angle), radius * std::sin(theta + angle), 0.5;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
+    gc_init_.segment(3, 4) << cos(theta / 2), 0, 0, sin(theta / 2);
+//    opponent_->setPosition(radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38);
+//    opponent_->setOrientation(cos(theta / 2), 0, 0, sin(theta / 2));
+//    opponent_gc_init_.head(3) << radius * std::cos(theta + oppositeAngle), radius * std::sin(theta + oppositeAngle), 0.38;//1.5 * std::cos(theta), 1.5 * std::sin(theta), 0.5;
   }
 
   void curriculumUpdate(int iter){
@@ -354,79 +391,130 @@ class PretrainingAnymalController_20233319 {
       curriculumLevel = uniDistInt_(gen_);
     }
 
-    opponent_->setName("opponent_" + std::to_string(curriculumLevel));
-    setOpponentName(opponent_->getName());
+//    opponent_->setName("opponent_" + std::to_string(curriculumLevel));
+//    setOpponentName(opponent_->getName());
 
   }
 
   void randomizeBoxVelocity(raisim::World *world){
-      raisim::Vec<3> opponent_pos;
-      opponent_->getPosition(opponent_pos);
-
-
-      Eigen::Vector3d poseError = (-opponent_pos.e()) / ((opponent_pos.e()).norm() + 1e-5);
-      raisim::Vec<3> boxForce;
-      boxForce[0] = poseError(0);
-      boxForce[1] = poseError(1);
-      boxForce[2] = 0.0;
-
-      raisim::Vec<3> auxForce;
-      auxForce[0] = uniDist_(gen_) * uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
-      auxForce[1] = uniDist_(gen_) * uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
-      auxForce[2] = 0.0;
-
-      auxForce = auxForce / (auxForce.norm() + 1e-5);
-
-      raisim::Vec<3> shearForce;
-      shearForce[0] = -poseError(1);
-      shearForce[1] = poseError(0);
-      shearForce[2] = 0.0;
-
-      shearForce = shearForce / (shearForce.norm() + 1e-5);
-
-      if(currentTime_ < 1e-5){
-        externalForceCount=0;
-        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
-        externalForceCount++;
-      }
-      else if(currentTime_ > 3.0 && externalForceCount == 1){
-        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
-        externalForceCount++;
-      }
-      else if(currentTime_ > 8.0 && externalForceCount == 2){
-        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
-        externalForceCount++;}
-
-
-      if(opponent_cage2base_pos_xy_.norm() > cage_radius_ * 0.75)
-      {
-        boxForce = (boxForce * 4.0 + auxForce * 0.2 + shearForce) / (boxForce * 2.0 + auxForce * 0.2 + shearForce).norm();;
-      }
-      else {
-        double randRadialForce = uniDist_(gen_) * uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
-        boxForce = (boxForce * (randRadialForce * 0.4 + 1.5) + auxForce * 0.2 + shearForce);
-        boxForce = boxForce / (boxForce.norm() + 1e-5);
-      }
-
-      if(curriculumLevel > 100){
-        boxExternalForce_ = boxForce.e() * 10.0 * ((double)(curriculumLevel) -100.) / 200. * opponent_->getMass();
-      }
+//      raisim::Vec<3> opponent_pos;
+//      opponent_->getPosition(0, opponent_pos);
+//
+//      Eigen::Vector3d poseError = (-opponent_pos.e()) / ((opponent_pos.e()).norm() + 1e-5);
+//      raisim::Vec<3> boxForce;
+//      boxForce[0] = poseError(0);
+//      boxForce[1] = poseError(1);
+//      boxForce[2] = 0.0;
+//
+//      raisim::Vec<3> auxForce;
+//      auxForce[0] = uniDist_(gen_);
+//      auxForce[1] = uniDist_(gen_);
+//      auxForce[2] = 0.0;
+//
+//      auxForce = auxForce / (auxForce.norm() + 1e-5);
+//
+//      raisim::Vec<3> shearForce;
+//      shearForce[0] = -poseError(1);
+//      shearForce[1] = poseError(0);
+//      shearForce[2] = 0.0;
+//
+//      shearForce = shearForce / (shearForce.norm() + 1e-5);
+//
+//      if(currentTime_ < 1e-5){
+//        externalForceCount=0;
+//        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+//        externalForceCount++;
+//      }
+//      else if(currentTime_ > 3.0 && externalForceCount == 1){
+//        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+//        externalForceCount++;
+//      }
+//      else if(currentTime_ > 8.0 && externalForceCount == 2){
+//        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+//        externalForceCount++;}
+//
+//
+//      if(opponent_cage2base_pos_xy_.norm() > cage_radius_ * 0.75)
+//      {
+//        boxForce = (boxForce * 4.0 + auxForce * 0.2 + shearForce) / (boxForce * 2.0 + auxForce * 0.2 + shearForce).norm();;
+//      }
+//      else {
+//        double randRadialForce = uniDist_(gen_);
+//        boxForce = (boxForce * (randRadialForce * 0.4 + 1.5) + auxForce * 0.2 + shearForce);
+//        boxForce = boxForce / (boxForce.norm() + 1e-5);
+//      }
+//
+//      if(curriculumLevel > 100){
+//        boxExternalForce_ = boxForce.e() * 10.0 * ((double)(curriculumLevel) -100.) / 200. * opponent_->getMass();
+//      }raisim::Vec<3> opponent_pos;
+//      opponent_->getPosition(0, opponent_pos);
+//
+//      Eigen::Vector3d poseError = (-opponent_pos.e()) / ((opponent_pos.e()).norm() + 1e-5);
+//      raisim::Vec<3> boxForce;
+//      boxForce[0] = poseError(0);
+//      boxForce[1] = poseError(1);
+//      boxForce[2] = 0.0;
+//
+//      raisim::Vec<3> auxForce;
+//      auxForce[0] = uniDist_(gen_);
+//      auxForce[1] = uniDist_(gen_);
+//      auxForce[2] = 0.0;
+//
+//      auxForce = auxForce / (auxForce.norm() + 1e-5);
+//
+//      raisim::Vec<3> shearForce;
+//      shearForce[0] = -poseError(1);
+//      shearForce[1] = poseError(0);
+//      shearForce[2] = 0.0;
+//
+//      shearForce = shearForce / (shearForce.norm() + 1e-5);
+//
+//      if(currentTime_ < 1e-5){
+//        externalForceCount=0;
+//        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+//        externalForceCount++;
+//      }
+//      else if(currentTime_ > 3.0 && externalForceCount == 1){
+//        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+//        externalForceCount++;
+//      }
+//      else if(currentTime_ > 8.0 && externalForceCount == 2){
+//        shearForce *= uniDist_(gen_) > 0.5 ? 1.0 : -1.0;
+//        externalForceCount++;}
+//
+//
+//      if(opponent_cage2base_pos_xy_.norm() > cage_radius_ * 0.75)
+//      {
+//        boxForce = (boxForce * 4.0 + auxForce * 0.2 + shearForce) / (boxForce * 2.0 + auxForce * 0.2 + shearForce).norm();;
+//      }
+//      else {
+//        double randRadialForce = uniDist_(gen_);
+//        boxForce = (boxForce * (randRadialForce * 0.4 + 1.5) + auxForce * 0.2 + shearForce);
+//        boxForce = boxForce / (boxForce.norm() + 1e-5);
+//      }
+//
+//      if(curriculumLevel > 100){
+//        boxExternalForce_ = boxForce.e() * 10.0 * ((double)(curriculumLevel) -100.) / 200. * opponent_->getMass();
+//      }
   }
 
     //RandomizeRelated
   bool israndomizeBoxPosition = true;
-  bool israndomizeBoxVelocity = true;
-  bool isBoxPosCurriculum = true;
-  bool isCageRadiusCurriculum = true;
+  bool israndomizeBoxVelocity = false;
+  bool isBoxPosCurriculum = false;
+  bool isCageRadiusCurriculum = false;
 
   double cageRadiusCurriculumIter = 1000.;
   double boxExternelForceCurriculumIter = 2000.;
   double boxMassCurriculumIter = 3000.;
   int curriculumLevel = 0.;
 
-  raisim::Box *opponent_;
+//  raisim::Box *opponent_;
+  raisim::ArticulatedSystem *opponent_;
   Eigen::Vector3d boxExternalForce_;
   int externalForceCount = 0;
+
+  Eigen::Vector3d globalCommandPoint, bodyCommandPoint;
 
  private:
   std::string name_, opponentName_;
@@ -436,7 +524,7 @@ class PretrainingAnymalController_20233319 {
   raisim::Visuals *cage_;
   double cage_radius_ = 3.0;
   Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_;
-  Eigen::VectorXd cage2base_pos_xy_;
+  Eigen::VectorXd cage2base_pos_xy_, cage2base_pos_body_;;
   Eigen::VectorXd previousAction_, prepreviousAction_;
   Eigen::VectorXd actionMean_, actionStd_, obDouble_;
   Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
@@ -446,7 +534,7 @@ class PretrainingAnymalController_20233319 {
   double torqueRewardCoeff_ = 0.;
 
   //opponent robot's data
-  Eigen::VectorXd opponent_gc_, opponent_gv_, opponent_gc_init_, previous_opponent_gc_;
+  Eigen::VectorXd opponent_gc_, opponent_gv_, opponent_gc_init_;
   Eigen::Vector3d opponent_bodyLinearVel_, opponent_bodyAngularVel_;
   Eigen::VectorXd opponent_cage2base_pos_xy_;
 
@@ -460,15 +548,19 @@ class PretrainingAnymalController_20233319 {
   double rewForwardVel_ = 0., rewMove2Opponent_ = 0., rewTorque_ = 0., rewTakeGoodPose = 0., rewOpponent2CageDist_ = 0., rewPushOpponentOff_ = 0., rewBaseMotion_=0.,
           rewJointPosition = 0., rewBaseHeight=0.;
 
+  int opponent_mode_ = 0;
+
 //  Yaml::Node &cfg_;
+
+  bool isOpponentAnymal_=true;
 
   thread_local static std::uniform_real_distribution<double> uniDist_;
   thread_local static std::uniform_real_distribution<double> uniDistCage_;
   thread_local static std::uniform_int_distribution<int> uniDistInt_;
   thread_local static std::mt19937 gen_;
 };
-thread_local std::mt19937 raisim::PretrainingAnymalController_20233319::gen_;
-thread_local std::uniform_real_distribution<double> raisim::PretrainingAnymalController_20233319::uniDist_(0., 1.);
-thread_local std::uniform_real_distribution<double> raisim::PretrainingAnymalController_20233319::uniDistCage_(0.8, 1.2);
-thread_local std::uniform_int_distribution<int> raisim::PretrainingAnymalController_20233319::uniDistInt_(20, 300);
+thread_local std::mt19937 raisim::AnymalControllerTrain_99999999::gen_;
+thread_local std::uniform_real_distribution<double> raisim::AnymalControllerTrain_99999999::uniDist_(0., 1.);
+thread_local std::uniform_real_distribution<double> raisim::AnymalControllerTrain_99999999::uniDistCage_(0.5, 1.5);
+thread_local std::uniform_int_distribution<int> raisim::AnymalControllerTrain_99999999::uniDistInt_(80, 300);
 }
