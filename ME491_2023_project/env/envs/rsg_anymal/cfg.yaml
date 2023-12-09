@@ -27,7 +27,7 @@ environment:
     opponent2CageDist:
       coeff: 0.2
     pushOpponentOff:
-      coeff: 10.0
+      coeff: 0.0
     baseMotion:
       coeff: 0.0
     jointPosition:

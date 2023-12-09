@@ -112,7 +112,7 @@ reward_analyzer = RewardAnalyzer(env, ppo.writer)
 
 if mode == 'retrain':
     load_param(weight_path, env, actor, critic, ppo.optimizer, saver.data_dir)
-if not is_pretrain:
+if not is_pretrain and opponent_weight_path != '':
     load_opponent_param(opponent_weight_path, env, opponent_actor, saver.data_dir)
 for update in range(1000000):
     start = time.time()

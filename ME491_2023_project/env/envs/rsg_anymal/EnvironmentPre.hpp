@@ -30,12 +30,11 @@ class ENVIRONMENT {
       visualizable_(visualizable) {
     /// add objects
     auto* robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_blue.urdf");
-    auto* opponent = world_.addBox(0.7, 0.7, 0.7, 0.38);
-    opponent->setName("opponent_" + std::to_string(controller_.curriculumLevel));
+
+
     robot->setName(PLAYER_NAME);
     controller_.setName(PLAYER_NAME);
-    controller_.setOpponentName(opponent->getName());
-//    controller_.setBox(box);
+
     controller_.setCageRadius(cage_radius_);
 
 //    controller_.setCfg(cfg);
@@ -52,12 +51,19 @@ class ENVIRONMENT {
     /// Reward coefficients
     rewards_.initializeFromConfigurationFile (cfg["reward"]);
 
+      /// indices of links that should not make contact with ground
+    footIndices_.insert(robot->getBodyIdx("LF_SHANK"));
+    footIndices_.insert(robot->getBodyIdx("RF_SHANK"));
+    footIndices_.insert(robot->getBodyIdx("LH_SHANK"));
+    footIndices_.insert(robot->getBodyIdx("RH_SHANK"));
+
     /// visualize if it is the first environment
     if (visualizable_) {
       server_ = std::make_unique<raisim::RaisimServer>(&world_);
       server_->launchServer();
       server_->focusOn(robot);
       cage_ = server_->addVisualCylinder("cage", cage_radius_, 0.05);
+      commandSphere_ = server_->addVisualSphere("commandSphere", 0.2, 0.0, 0.0, 1.0, 0.5);
       cage_->setPosition(0,0,0);
       cage_->setCylinderSize(cage_radius_, 0.05);
     }
@@ -70,18 +76,32 @@ class ENVIRONMENT {
       cage_radius_ = 2.0 + 1.0 * std::min(1.0, ((double)iter_ / (double)controller_.cageRadiusCurriculumIter));
       controller_.setCageRadius(cage_radius_);
     }
-    else cage_radius_ = 3.0;
+    else{
+      cage_radius_ = default_cage_radius_;
+      controller_.setCageRadius(cage_radius_);
+    }
 
     auto theta = uniDist_(gen_) * 2 * M_PI;
     controller_.reset(&world_, theta);
+    timer_ = 0;
+//    commandSpheres_[0]->setPosition(0,0,2.5);
+    if(visualizable_){
+      cage_->setPosition(0,0,0);
+      cage_->setCylinderSize(cage_radius_, 0.05);
+      commandSphere_->setPosition(controller_.globalCommandPoint);
+    }
   }
 
   float step(const Eigen::Ref<EigenVec> &action) {
+    timer_ += 1;
     controller_.advance(&world_, action);
+    if(visualizable_){
+      commandSphere_->setPosition(controller_.globalCommandPoint);
+    }
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
-
-      Eigen::Vector3d opponentPos = controller_.opponent_->getPosition();
-      controller_.opponent_->setExternalForce(0, {opponentPos(0), opponentPos(1), 0.}, controller_.boxExternalForce_);
+      raisim::Vec<3> opponentPos;
+      controller_.anymal_->getPosition(0, opponentPos);
+      controller_.anymal_->setExternalForce(0, opponentPos, controller_.boxExternalForce_);
 
       if (server_) server_->lockVisualizationServerMutex();
       world_.integrate();
@@ -98,23 +118,75 @@ class ENVIRONMENT {
     ob = controller_.getObservation().cast<float>();
   }
 
+    bool player1_die() {
+    auto anymal = reinterpret_cast<raisim::ArticulatedSystem *>(world_.getObject(PLAYER_NAME));
+    /// base contact with ground
+    for(auto& contact: anymal->getContacts()) {
+      if(contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld() &&
+          contact.getlocalBodyIndex() == anymal->getBodyIdx("base")) {
+        return true;
+      }
+      if (footIndices_.find(contact.getlocalBodyIndex()) == footIndices_.end() && contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld()) {
+        return true;
+      }
+    }
+    /// get out of the cage
+    int gcDim = anymal->getGeneralizedCoordinateDim();
+    Eigen::VectorXd gc;
+    gc.setZero(gcDim);
+    gc = anymal->getGeneralizedCoordinate().e();
+    if (gc.head(2).norm() > cage_radius_) {
+      return true;
+    }
+    return false;
+  }
+
+  bool player2_die() {
+    auto anymal = reinterpret_cast<raisim::ArticulatedSystem *>(world_.getObject("opponent"));
+    /// base contact with ground
+    for(auto& contact: anymal->getContacts()) {
+      if(contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld() &&
+          contact.getlocalBodyIndex() == anymal->getBodyIdx("base")) {
+        return true;
+      }
+    }
+    /// get out of the cage
+    int gcDim = anymal->getGeneralizedCoordinateDim();
+    Eigen::VectorXd gc;
+    gc.setZero(gcDim);
+    gc = anymal->getGeneralizedCoordinate().e();
+    if (gc.head(2).norm() > cage_radius_) {
+      return true;
+    }
+    return false;
+  }
+
   bool isTerminalState(float &terminalReward) {
-    int terminalState = controller_.isTerminalState(&world_);
 
-    if(terminalState == 1 || terminalState == 2) {
-      terminalReward = terminalRewardCoeff_;
-      return true;
-    }
-    else if(terminalState == 3){
-      terminalReward = terminalRewardCoeff_ / 2;
-      return true;
-    }
-    else if(terminalState == 4) {
-      terminalReward = 0.f;
+//    if (player1_die() && player2_die()) {
+//      terminalReward = 0.f;
+//      return true;
+//    }
+
+    if (timer_ > 10. * 1 / control_dt_) {
+      controller_.checkcommandPointSuccess(true);
+      if(controller_.commandSuccessCount > 0){
+        terminalReward = controller_.commandSuccessCount * 8.f;
+      }
+      else terminalReward = -4.f;
       return true;
     }
 
-    terminalReward = 0.f;
+
+//    if (!player1_die() && player2_die()) {
+//      terminalReward = 0.f;
+//      return true;
+//    }
+
+    if (player1_die()) {
+      terminalReward = terminalRewardCoeff_ + controller_.commandSuccessCount * 4.f;
+      return true;
+    }
     return false;
   }
 
@@ -154,6 +226,8 @@ class ENVIRONMENT {
   raisim::Reward& getRewards() { return rewards_; }
 
  private:
+  std::set<size_t> footIndices_;
+  int timer_ = 0;
   bool visualizable_ = false;
   double terminalRewardCoeff_ = -10.;
   PretrainingAnymalController_20233319 controller_;
@@ -166,9 +240,10 @@ class ENVIRONMENT {
   thread_local static std::uniform_real_distribution<double> uniDist_;
   thread_local static std::mt19937 gen_;
 
-  raisim::Visuals *cage_;
+  raisim::Visuals *cage_, *commandSphere_;
+  std::vector<raisim::Visuals*> commandSpheres_;
 
-  double cage_radius_ = 3.0;
+  double cage_radius_ = 3.0, default_cage_radius_ = 3.0;
   int iter_ = 0;
 
 };

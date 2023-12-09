@@ -60,8 +60,11 @@ class ENVIRONMENT {
     /// Reward coefficients
     rewards_.initializeFromConfigurationFile (cfg["reward"]);
 
+
+
     /// visualize if it is the first environment
     if (visualizable_) {
+
       controller_.visualizable_ = visualizable_;
       server_ = std::make_unique<raisim::RaisimServer>(&world_);
       server_->launchServer();
@@ -76,9 +79,17 @@ class ENVIRONMENT {
   void init() {}
 
   void reset() {
+    if(opponent_controller_.isCageRadiusCurriculum) {
+      cage_radius_ = 2.0 + 1.0 * std::min(1.0, ((double)iter_ / (double)opponent_controller_.cageRadiusCurriculumIter));
+      controller_.setCageRadius(cage_radius_);
+      opponent_controller_.setCageRadius(cage_radius_);
+    }
+    else cage_radius_ = 3.0;
+
     auto theta = uniDist_(gen_) * 2 * M_PI;
     controller_.reset(&world_, theta);
     opponent_controller_.reset(&world_, theta);
+    controller_.curriculumLevel = opponent_controller_.curriculumLevel;
     controller_.setOpponentGcInit(opponent_controller_.getGcInit());
     opponent_controller_.setOpponentGcInit(controller_.getGcInit());
     timer_ = 0;
@@ -90,10 +101,17 @@ class ENVIRONMENT {
     opponent_controller_.advance(&world_, opponent_action);
 
     if(visualizable_){
+      cage_->setCylinderSize(cage_radius_, 0.05);
 //      commandSphere_->setPosition(opponent_controller_.globalCommandPoint);
     }
 
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
+
+      if(opponent_controller_.israndomizeOpponentExtForce) {
+        Eigen::Vector3d opponentPos = opponent_controller_.getGc().head(3);
+        opponent_controller_.anymal_->setExternalForce(0, {opponentPos(0), opponentPos(1), 0.}, opponent_controller_.opponentExternalForce_);
+      }
+
       if (server_) server_->lockVisualizationServerMutex();
       world_.integrate();
       if (server_) server_->unlockVisualizationServerMutex();
@@ -129,7 +147,7 @@ class ENVIRONMENT {
     Eigen::VectorXd gc;
     gc.setZero(gcDim);
     gc = anymal->getGeneralizedCoordinate().e();
-    if (gc.head(2).norm() > 3) {
+    if (gc.head(2).norm() > cage_radius_) {
       return true;
     }
     return false;
@@ -138,18 +156,18 @@ class ENVIRONMENT {
   bool player2_die() {
     auto anymal = reinterpret_cast<raisim::ArticulatedSystem *>(world_.getObject(PLAYER2_NAME));
     /// base contact with ground
-//    for(auto& contact: anymal->getContacts()) {
-//      if(contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld() &&
-//          contact.getlocalBodyIndex() == anymal->getBodyIdx("base")) {
-//        return true;
-//      }
-//    }
+    for(auto& contact: anymal->getContacts()) {
+      if(contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld() &&
+          contact.getlocalBodyIndex() == anymal->getBodyIdx("base")) {
+        return true;
+      }
+    }
     /// get out of the cage
     int gcDim = anymal->getGeneralizedCoordinateDim();
     Eigen::VectorXd gc;
     gc.setZero(gcDim);
     gc = anymal->getGeneralizedCoordinate().e();
-    if (gc.head(2).norm() > 3) {
+    if (gc.head(2).norm() > cage_radius_) {
       return true;
     }
     return false;
@@ -168,7 +186,7 @@ class ENVIRONMENT {
     }
 
     if (timer_ > 10 * 100) {
-      terminalReward = 0.f;
+      terminalReward = -4.f;
       return true;
     }
 
