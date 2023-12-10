@@ -161,8 +161,8 @@ for update in range(1000000):
             load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update)
             check_me_first = True
         else:
-            if(update % 100 == 0 and update > 1000):
-                load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update-1000)
+            if(update % 100 == 0 and update > 500):
+                load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update-500)
 
     if update % cfg['environment']['eval_every_n'] == 0:
         env.reset()

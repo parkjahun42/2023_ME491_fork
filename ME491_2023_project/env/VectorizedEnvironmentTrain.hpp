@@ -166,7 +166,7 @@ class VectorizedEnvironment {
 //    std::cout << curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() << std::endl;
     if(modeLevel == 0) {
       if (curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() > 100){
-        if(mode_[0] < 0.2)
+        if(mode_[0] < 0.21)
         {
           #pragma omp parallel for schedule(auto)
           for (int i = 0; i < num_envs_; i++) {
@@ -176,17 +176,19 @@ class VectorizedEnvironment {
           modeLevel++;
           setMode();
         }
-        #pragma omp parallel for schedule(auto)
-        for (int i = 0; i < num_envs_; i++) {
-          if(i < (int)(mode_[0] * num_envs_)) environments_[i]->setCurriculumLevelZero();
-        }
-        mode_[0] -= 0.1;
-        mode_[2] += 0.1;
+        else {
+          #pragma omp parallel for schedule(auto)
+          for (int i = 0; i < num_envs_; i++) {
+            if (i < (int) (mode_[0] * num_envs_)) environments_[i]->setCurriculumLevelZero();
+          }
+          mode_[0] -= 0.1;
+          mode_[2] += 0.1;
 //        environments_[0]-> visualizable_ = false;
 //        environments_[(int)((mode_[0] + mode_[1])*num_envs_ +1)]-> visualizable_ = true;
 
 
-        setMode();
+          setMode();
+        }
       }
 
 //      if (curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() > 150){
@@ -205,15 +207,15 @@ class VectorizedEnvironment {
         for (int i = 0; i < num_envs_; i++) {
           if(i < (int)((mode_[0]+mode_[1]+mode_[2]) * num_envs_)) environments_[i]->setCurriculumLevelZero();
         }
-        mode_ << 0.0, 0.1, 0.7, 0.0, 0.2;
+        mode_ << 0.0, 0.1, 0.6, 0.1, 0.2;
         modeLevel++;
         setMode();
       }
     }
     else if(modeLevel == 2)
     {
-      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 250){ // && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 250){
-        mode_ << 0.0, 0.5, 0.3, 0.0, 0.2;
+      if (curriculumLevel_.segment((int)((mode_[0]) * num_envs_), (int)((mode_[1]) * num_envs_)).mean() > 100 && curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 100 && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 100){
+        mode_ << 0.0, 0.5, 0.2, 0.1, 0.2;
 //        environments_[0]-> visualizable_ = true;
 //        environments_[(int)((0.4)*num_envs_ +1)]-> visualizable_ = false;
         modeLevel++;
@@ -223,7 +225,7 @@ class VectorizedEnvironment {
     else if(modeLevel == 3)
     {
       if (curriculumLevel_.segment((int)((mode_[0]) * num_envs_), (int)((mode_[1]) * num_envs_)).mean() > 150){
-        mode_ << 0.0, 0.75, 0.0, 0.05, 0.2;
+        mode_ << 0.0, 0.6, 0.1, 0.1, 0.2;
         modeLevel++;
         setMode();
       }
