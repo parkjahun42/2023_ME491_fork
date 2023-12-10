@@ -37,10 +37,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-m', '--mode', help='set mode either train or test', type=str, default='train')
 parser.add_argument('-w', '--weight', help='pre-trained weight path', type=str, default='')
 parser.add_argument('-op', '--opponent', help='pre-trained opponent weight path', type=str, default='')
+parser.add_argument('-op2', '--opponent2', help='pre-trained opponent weight path', type=str, default='')
+parser.add_argument('-op3', '--opponent3', help='pre-trained opponent weight path', type=str, default='')
 args = parser.parse_args()
 mode = args.mode
 weight_path = args.weight
 opponent_weight_path = args.opponent
+opponent_weight_path2 = args.opponent2
+opponent_weight_path3 = args.opponent3
 
 # check if gpu is available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -89,6 +93,22 @@ opponent_actor = ppo_module.Actor(ppo_module.MLP(cfg['architecture']['policy_net
                                                                                     cfg['seed']),
                                   device)
 
+opponent_actor2 = ppo_module.Actor(ppo_module.MLP(cfg['architecture']['policy_net'], nn.LeakyReLU, opponent_ob_dim, act_dim),
+                                  ppo_module.MultivariateGaussianDiagonalCovariance(act_dim,
+                                                                                    env.num_envs,
+                                                                                    5.0,
+                                                                                    NormalSampler(act_dim),
+                                                                                    cfg['seed']),
+                                  device)
+
+opponent_actor3 = ppo_module.Actor(ppo_module.MLP(cfg['architecture']['policy_net'], nn.LeakyReLU, opponent_ob_dim, act_dim),
+                                  ppo_module.MultivariateGaussianDiagonalCovariance(act_dim,
+                                                                                    env.num_envs,
+                                                                                    5.0,
+                                                                                    NormalSampler(act_dim),
+                                                                                    cfg['seed']),
+                                  device)
+
 if is_pretrain:
     saver = ConfigurationSaver(log_dir=home_path + "/ME491_2023_project/data/" + task_name, save_items=[task_path + "/cfg.yaml", task_path + "/runner.py", task_path + "/EnvironmentPre.hpp", task_path + "/PretrainingAnymalController_20233319.hpp"])
 else:
@@ -113,12 +133,28 @@ reward_analyzer = RewardAnalyzer(env, ppo.writer)
 if mode == 'retrain':
     load_param(weight_path, env, actor, critic, ppo.optimizer, saver.data_dir)
 if not is_pretrain and opponent_weight_path != '':
-    load_opponent_param(opponent_weight_path, env, opponent_actor, saver.data_dir)
+    load_opponent_param(opponent_weight_path, env, opponent_actor, saver.data_dir, 1)
+    load_opponent_param(opponent_weight_path2, env, opponent_actor2, saver.data_dir, 2)
+    load_opponent_param(opponent_weight_path3, env, opponent_actor3, saver.data_dir, 3)
+
+num_envs = cfg['environment']['num_envs']
+check_me_first = False
 for update in range(1000000):
     start = time.time()
     reward_sum = 0
     done_sum = 0
     average_dones = 0.
+
+    env.check_curriculum()
+    mode = env.mode_callback()
+    modeLevel = env.mode_level_callback()
+    if modeLevel > 1:
+        if check_me_first == False:
+            load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update-500)
+            check_me_first = True
+        else:
+            if(update % 100 == 0 and update > 1000):
+                load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update-1000)
 
     if update % cfg['environment']['eval_every_n'] == 0:
         env.reset()
@@ -146,7 +182,12 @@ for update in range(1000000):
                 else:
                     obs, opponent_obs = env.observe(False)
                     action = loaded_graph.architecture(torch.from_numpy(obs).cpu())
-                    opponent_action = opponent_actor.noiseless_action(opponent_obs)
+                    opponent_action = torch.zeros_like(action)
+                    opponent_action[(int)(num_envs * mode[0]):(int)(num_envs * (mode[0] + mode[1]))] = opponent_actor.noiseless_action(opponent_obs[(int)(num_envs * mode[0]):(int)(num_envs * (mode[0] + mode[1]))]).detach()
+                    opponent_action[(int)(num_envs * (mode[0] + mode[1])):(int)(num_envs * (mode[0] + mode[1] + mode[2]))] = opponent_actor2.noiseless_action(opponent_obs[(int)(num_envs * (mode[0] + mode[1])):(int)(num_envs * (mode[0] + mode[1] + mode[2]))]).detach()
+                    opponent_action[(int)(num_envs * (mode[0] + mode[1] + mode[2])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3]))] = opponent_actor3.noiseless_action(opponent_obs[(int)(num_envs * (mode[0] + mode[1] + mode[2])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3]))]).detach()
+
+                    # opponent_action = opponent_actor.noiseless_action(opponent_obs)
                     reward, dones = env.step(action.cpu().detach().numpy(), opponent_action.cpu().detach().numpy())
 
                 # reward_analyzer.add_reward_info(env.get_reward_info())
@@ -163,7 +204,7 @@ for update in range(1000000):
         env.save_scaling(saver.data_dir, str(update))
 
     # actual training
-    if update % 20 < 2:
+    if update % 1 < 2:
         env.turn_on_visualization()
     else:
         env.turn_off_visualization()
@@ -176,7 +217,12 @@ for update in range(1000000):
         else:
             obs, opponent_obs = env.observe()
             action = ppo.act(obs)
-            opponent_action = opponent_actor.noiseless_action(opponent_obs).detach().numpy()
+            opponent_action = torch.zeros_like(torch.from_numpy(action))
+            opponent_action[(int)(num_envs * mode[0]):(int)(num_envs * (mode[0] + mode[1]))] = opponent_actor.noiseless_action(opponent_obs[(int)(num_envs * mode[0]):(int)(num_envs * (mode[0] + mode[1]))]).detach()
+            opponent_action[(int)(num_envs * (mode[0] + mode[1])):(int)(num_envs * (mode[0] + mode[1] + mode[2]))] = opponent_actor2.noiseless_action(opponent_obs[(int)(num_envs * (mode[0] + mode[1])):(int)(num_envs * (mode[0] + mode[1] + mode[2]))]).detach()
+            opponent_action[(int)(num_envs * (mode[0] + mode[1] + mode[2])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3]))] = opponent_actor3.noiseless_action(opponent_obs[(int)(num_envs * (mode[0] + mode[1] + mode[2])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3]))]).detach()
+
+            opponent_action = opponent_action.detach().numpy()
             reward, dones = env.step(action, opponent_action)
 
         if update % cfg['environment']['analyze_freq'] == 0:
@@ -216,4 +262,5 @@ for update in range(1000000):
     print('{:<40} {:>6}'.format("fps: ", '{:6.0f}'.format(total_steps / (end - start))))
     print('{:<40} {:>6}'.format("real time factor: ", '{:6.0f}'.format(total_steps / (end - start)
                                                                        * cfg['environment']['control_dt'])))
+    print('{:<40} {:>6}'.format("mode level: ", '{:6.0f}'.format(modeLevel)))
     print('----------------------------------------------------\n')

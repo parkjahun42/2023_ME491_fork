@@ -97,6 +97,8 @@ class ENVIRONMENT {
     controller_.advance(&world_, action);
     if(visualizable_){
       commandSphere_->setPosition(controller_.globalCommandPoint);
+      if(controller_.continuousGoalCount > 200) commandSphere_->setColor(0.0, 1.0, 0.0, 0.5);
+      else commandSphere_->setColor(0.0, 0.0, 1.0, 0.5);
     }
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
       raisim::Vec<3> opponentPos;
@@ -171,7 +173,7 @@ class ENVIRONMENT {
     if (timer_ > 10. * 1 / control_dt_) {
       controller_.checkcommandPointSuccess(true);
       if(controller_.commandSuccessCount > 0){
-        terminalReward = controller_.commandSuccessCount * 8.f;
+        terminalReward = controller_.commandSuccessCount * 10.f;
       }
       else terminalReward = -4.f;
       return true;
@@ -184,7 +186,7 @@ class ENVIRONMENT {
 //    }
 
     if (player1_die()) {
-      terminalReward = terminalRewardCoeff_ + controller_.commandSuccessCount * 4.f;
+      terminalReward = terminalRewardCoeff_;
       return true;
     }
     return false;

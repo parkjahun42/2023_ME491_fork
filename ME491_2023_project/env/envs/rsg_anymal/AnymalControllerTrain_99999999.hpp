@@ -58,8 +58,12 @@ class AnymalControllerTrain_99999999{
     anymal_->setGeneralizedForce(Eigen::VectorXd::Zero(gvDim_));
 
     /// MUST BE DONE FOR ALL ENVIRONMENTS
-    obDim_ = 74;
-    realObDim_ = 120;
+    obDim_ = 120;
+    realOb0Dim_ = 99;
+    realOb1Dim_ = 99;
+    realOb2Dim_ = 65;
+    realOb3Dim_ = 99;
+    realOb4Dim_ = 99;
     actionDim_ = nJoints_;
     actionMean_.setZero(actionDim_);
     actionStd_.setZero(actionDim_);
@@ -113,7 +117,7 @@ class AnymalControllerTrain_99999999{
     pTarget12_ += actionMean_;
     pTarget_.tail(nJoints_) = pTarget12_;
 
-    if(opponent_mode_ == 0) pTarget_.tail(nJoints_) = actionMean_;
+    if(opponent_mode_ == 0 || (opponent_mode_ == 4)) pTarget_.tail(nJoints_) = actionMean_;
 //    pTarget_.tail(nJoints_) = actionMean_;
 
     anymal_->setPdTarget(pTarget_, vTarget_);
@@ -121,17 +125,24 @@ class AnymalControllerTrain_99999999{
 
     if(israndomizeOpponentExtForce) randomizeExtForce(world);
 
+    if(opponent_mode_ == 2) commandPointUpdate();
+
     return true;
   }
 
   inline bool reset(raisim::World *world, double theta) {
 
-    curriculumLevelUpdate();
+//    curriculumLevelUpdate();
     previousAction_.setZero();
     prepreviousAction_.setZero();
 
     currentTime_ = 0.;
     opponentExternalForce_.setZero();
+    changeGoal = true;
+    commandSuccessCount = 0;
+    commandPointCount = 0;
+
+    if(opponent_mode_ == 1) israndomizeOpponentPosition = false;
 
     if (playerNum_ == 0) {
       gc_init_.head(3) << cage_radius_ / 2 * std::cos(theta), cage_radius_ / 2 * std::sin(theta), 0.5;
@@ -157,6 +168,8 @@ class AnymalControllerTrain_99999999{
     anymal_->setState(gc_init_, gv_init_);
 
     if(israndomizeGcGvInit) randomizeGcGvInit();
+
+    if(opponent_mode_ == 2) commandPointUpdate();
 
     return true;
   }
@@ -208,7 +221,7 @@ class AnymalControllerTrain_99999999{
 
     bodyCommandPoint = rot.e().transpose() * (globalCommandPoint - gc_.head(3));
 
-    if(opponent_mode_ == 0) {
+    if(opponent_mode_ == 0) { //PD
       obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
           gc_[2], /// body pose 1
           rot.e().row(2).transpose(), /// body orientation 3
@@ -226,9 +239,29 @@ class AnymalControllerTrain_99999999{
           40.0, /// opponent cage2base xy position 1
 
           cage_radius_,
-          Eigen::VectorXd::Ones(obDim_ - realObDim_) * 0.;
+          Eigen::VectorXd::Ones(obDim_ - realOb0Dim_) * 0.;
     }
-    else if(opponent_mode_ == 1){
+    else if(opponent_mode_ == 1){ //ME
+      obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
+                   gc_[2], /// body pose 1
+                   rot.e().row(2).transpose(), /// body orientation 3
+                   gc_.tail(12), /// joint angles 12
+                   gv_.tail(12), /// joint velocity 12
+                   previousAction_, prepreviousAction_, /// previous action 24
+                   cage2base_pos_body_.head(2), /// cage2base xy position in body frame 2
+                   cage2base_pos_xy_.norm(), /// cage2base xy position 1
+
+                  //opponent related data
+                  opponent_bodyLinearVel_, opponent_bodyAngularVel_, /// opponent body linear&angular velocity 6.
+                  rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)), /// Relative opponent player xyz position 3
+                  opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
+                  opponent_gc_.tail(12), /// opponent joint angles 12
+                  opponent_gv_.tail(12), /// opponent joint velocity 12
+                  opponent_cage2base_pos_xy_.norm(), //1
+                  cage_radius_,
+                  Eigen::VectorXd::Ones(obDim_-realOb1Dim_)*0.;
+    }
+    else if(opponent_mode_ == 2){ //Sphere
     obDouble_ << bodyCommandPoint,
                  bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
                  gc_[2], /// body pose 1
@@ -239,21 +272,48 @@ class AnymalControllerTrain_99999999{
                  cage2base_pos_body_.head(2), /// cage2base xy position in body frame 2
                  cage2base_pos_xy_.norm(), /// cage2base xy position 1
                  cage_radius_,
-                 Eigen::VectorXd::Ones(obDim_-realObDim1_)*0.0;
+                 Eigen::VectorXd::Ones(obDim_-realOb2Dim_)*0.0;
     }
+    else if(opponent_mode_ == 3){ //MUGISUNG
+    obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
+                 gc_[2], /// body pose 1
+                 rot.e().row(2).transpose(), /// body orientation 3
+                 gc_.tail(12), /// joint angles 12
+                 gv_.tail(12), /// joint velocity 12
+                 previousAction_, prepreviousAction_, /// previous action 24
+                 cage2base_pos_body_.head(2), /// cage2base xy position in body frame 2
+                 cage2base_pos_xy_.norm(), /// cage2base xy position 1
 
-//                bodyCommandPoint,
-//               bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
-//               gc_[2], /// body pose 1
-//               rot.e().row(2).transpose(), /// body orientation 3
-//               gc_.tail(12), /// joint angles 12
-//               gv_.tail(12), /// joint velocity 12
-//               previousAction_, prepreviousAction_, /// previous action 24
-//               cage2base_pos_body_.head(2), /// cage2base xy position in body frame 2
-//               cage2base_pos_xy_.norm(), /// cage2base xy position 1
-//               cage_radius_; /// cage radius 1
+                //opponent related data
+                opponent_bodyLinearVel_, opponent_bodyAngularVel_, /// opponent body linear&angular velocity 6.
+                rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)), /// Relative opponent player xyz position 3
+                opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
+                opponent_gc_.tail(12), /// opponent joint angles 12
+                opponent_gv_.tail(12), /// opponent joint velocity 12
+                opponent_cage2base_pos_xy_.norm(), //1
+                cage_radius_,
+                Eigen::VectorXd::Ones(obDim_-realOb3Dim_)*0.; //1
+    }
+    else if(opponent_mode_ >=4){ //BOX
+    obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
+                 gc_[2], /// body pose 1
+                 rot.e().row(2).transpose(), /// body orientation 3
+                 gc_.tail(12), /// joint angles 12
+                 gv_.tail(12), /// joint velocity 12
+                 previousAction_, prepreviousAction_, /// previous action 24
+                 cage2base_pos_body_.head(2), /// cage2base xy position in body frame 2
+                 cage2base_pos_xy_.norm(), /// cage2base xy position 1
 
-
+                //opponent related data
+                opponent_bodyLinearVel_, opponent_bodyAngularVel_, /// opponent body linear&angular velocity 6.
+                rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)), /// Relative opponent player xyz position 3
+                opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
+                opponent_gc_.tail(12), /// opponent joint angles 12
+                opponent_gv_.tail(12), /// opponent joint velocity 12
+                opponent_cage2base_pos_xy_.norm(), //1
+                cage_radius_,
+                Eigen::VectorXd::Ones(obDim_-realOb4Dim_)*0.;
+    }
 
   }
 
@@ -310,6 +370,14 @@ class AnymalControllerTrain_99999999{
 
   void setOpponentName(const std::string &name) {
     opponentName_ = name;
+  }
+
+  void setOpponentMode(const int &opponent_mode){
+    opponent_mode_ = opponent_mode;
+  }
+
+  void setOpponentInitMode(const int &opponent_mode){
+    init_opponent_mode_ = opponent_mode;
   }
 
 //  void setBox(raisim::Box *box) {
@@ -496,8 +564,6 @@ class AnymalControllerTrain_99999999{
 
   void curriculumLevelUpdate(){
 
-    curriculumCheck();
-
     if(curriculumLevel < 0) {
       curriculumLevel = 0;
     }
@@ -519,15 +585,62 @@ class AnymalControllerTrain_99999999{
     }
   }
 
+  void commandPointUpdate(){
+
+
+      if(changeGoal) {
+        commandPointCount++;
+        double prob = uniDist_(gen_);
+        if(prob < 0.9) {
+          globalCommandPoint(0) = uniDistBothSide_(gen_);
+          globalCommandPoint(1) = uniDistBothSide_(gen_);
+          globalCommandPoint(2) = 0.0;
+          globalCommandPoint = uniDist_(gen_) * cage_radius_ * 0.6 * globalCommandPoint / (globalCommandPoint.norm() + 1e-5);
+          globalCommandPoint(2) = 0.5;
+        }
+        else if(prob > 0.1){
+          globalCommandPoint << 0.0, 0.0, 0.5;
+        }
+        changeGoal = false;
+      }
+      else{
+        checkcommandPointSuccess();
+        if(currentTime_ > 3.0){
+//          if(curriculumLevel < 100) {
+//            if (checkcommandPointSuccess(true) == 1) changeGoal = true;
+//          }
+//          else{
+          if (checkcommandPointSuccess(true) == 1 && commandPointCount == 1) changeGoal = true;
+//          }
+        }
+      }
+  }
+
+  int checkcommandPointSuccess(bool isvalidation=false){
+    if((gc_.head(3) - globalCommandPoint.head(3)).norm() < 0.2) {
+      continuousGoalCount++;
+    }
+    else{
+      continuousGoalCount = 0;
+    }
+    if(isvalidation && continuousGoalCount > 100){
+      commandSuccessCount++;
+      if(commandSuccessCount > 2) commandSuccessCount = 2;
+      return 1;
+    }
+    return 0;
+
+  }
+
 
 
     //RandomizeRelated
   bool israndomizeOpponentPosition = true;
   bool israndomizeOpponentExtForce = false;
-  bool isOpponentPosCurriculum = true;
-  bool isopponentMassCurriculum = true;
-  bool isCageRadiusCurriculum = true;
-  bool israndomizeGcGvInit = true;
+  bool isOpponentPosCurriculum = false;
+  bool isopponentMassCurriculum = false;
+  bool isCageRadiusCurriculum = false;
+  bool israndomizeGcGvInit = false;
   bool isOpponentBaseCollisionCurriculum = false;
 
   double cageRadiusCurriculumIter = 1000.;
@@ -548,6 +661,10 @@ class AnymalControllerTrain_99999999{
   int externalForceCount = 0;
 
   Eigen::Vector3d globalCommandPoint, bodyCommandPoint;
+  int commandPointCount = 0;
+  int commandSuccessCount = 0;
+  int continuousGoalCount = 0;
+  bool changeGoal = false;
 
   std::vector<std::string> bodyNames;
   Eigen::VectorXd bodyMasses;
@@ -565,7 +682,7 @@ class AnymalControllerTrain_99999999{
   Eigen::VectorXd actionMean_, actionStd_, obDouble_;
   Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
   std::set<size_t> footIndices_;
-  int obDim_ = 0, realObDim_ = 0, realObDim1_ = 0, actionDim_ = 0;
+  int obDim_ = 0, realOb0Dim_ = 0, realOb1Dim_ = 0, realOb2Dim_ = 0, realOb3Dim_ = 0, realOb4Dim_ = 0, actionDim_ = 0;
   double forwardVelRewardCoeff_ = 0.;
   double torqueRewardCoeff_ = 0.;
 
@@ -585,12 +702,14 @@ class AnymalControllerTrain_99999999{
           rewJointPosition = 0., rewBaseHeight=0.;
 
   int opponent_mode_ = 0;
+  int init_opponent_mode_ = 0;
 
 //  Yaml::Node &cfg_;
 
   bool isOpponentAnymal_=true;
 
   thread_local static std::uniform_real_distribution<double> uniDist_;
+  thread_local static std::uniform_real_distribution<double> uniDistBothSide_;
   thread_local static std::uniform_real_distribution<double> uniDistCage_;
   thread_local static std::uniform_int_distribution<int> uniDistInt_;
   thread_local static std::mt19937 gen_;
@@ -599,4 +718,5 @@ thread_local std::mt19937 raisim::AnymalControllerTrain_99999999::gen_;
 thread_local std::uniform_real_distribution<double> raisim::AnymalControllerTrain_99999999::uniDist_(0., 1.);
 thread_local std::uniform_real_distribution<double> raisim::AnymalControllerTrain_99999999::uniDistCage_(0.5, 1.5);
 thread_local std::uniform_int_distribution<int> raisim::AnymalControllerTrain_99999999::uniDistInt_(80, 300);
+thread_local std::uniform_real_distribution<double> raisim::AnymalControllerTrain_99999999::uniDistBothSide_(-1., 1.);
 }

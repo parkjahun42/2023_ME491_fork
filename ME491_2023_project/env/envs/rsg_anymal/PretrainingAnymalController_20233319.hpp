@@ -126,6 +126,7 @@ class PretrainingAnymalController_20233319 {
     boxExternalForce_.setZero();
     changeGoal = true;
     commandSuccessCount = 0;
+    maxContinuousGoalCount = 0;
     commandPointCount = 0;
 
     auto oppositeAngle = uniDistCage_(gen_) * M_PI;
@@ -223,7 +224,7 @@ class PretrainingAnymalController_20233319 {
 
     Eigen::Vector3d targetVector = rot.e().transpose() * (globalCommandPoint.head(3) - gc_.head(3)) / (globalCommandPoint.head(3) - gc_.head(3)).norm();
 
-    rewForwardVel_ = exp(-(bodyLinearVel_.head(2) / (bodyLinearVel_.head(2).norm() + 1e-5)  - targetVector.head(2)).squaredNorm() / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
+    rewForwardVel_ = exp(-(gv_.head(2) / (gv_.head(2).norm() + 1e-5)  - targetVector.head(2)).squaredNorm() / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
     rewMove2Opponent_ = exp(-(gc_.head(3) - globalCommandPoint.head(3)).squaredNorm()/0.25);
 //    if((gc_.head(2) - globalCommandPoint.head(2)).norm() < 0.2 ) rewMove2Opponent_ = 0.0;
 //    rewTorque_ = anymal_->getGeneralizedForce().squaredNorm();
@@ -338,9 +339,9 @@ class PretrainingAnymalController_20233319 {
 
   void curriculumLevelUpdate() {
 
-    if (commandSuccessCount > 1) {
+    if (commandSuccessCount > 0) {
       curriculumLevel += 1;
-    } else if (commandSuccessCount == 0) {
+    } else if (maxContinuousGoalCount < 100) {
       curriculumLevel -= 1;
     }
 
@@ -378,7 +379,7 @@ class PretrainingAnymalController_20233319 {
 
         auxForce[0] = uniDistBothSide_(gen_);
         auxForce[1] = uniDistBothSide_(gen_);
-        auxForce[2] = uniDistBothSide_(gen_);
+        auxForce[2] = -1 * uniDist_(gen_);
         auxForce = auxForce / (auxForce.norm() + 1e-5);
         externalForceCount++;
       }
@@ -387,7 +388,7 @@ class PretrainingAnymalController_20233319 {
 
         auxForce[0] = uniDistBothSide_(gen_);
         auxForce[1] = uniDistBothSide_(gen_);
-        auxForce[2] = uniDistBothSide_(gen_);
+        auxForce[2] = -1 * uniDist_(gen_);
         auxForce = auxForce / (auxForce.norm() + 1e-5);
         externalForceCount++;
       }
@@ -396,7 +397,7 @@ class PretrainingAnymalController_20233319 {
 
         auxForce[0] = uniDistBothSide_(gen_);
         auxForce[1] = uniDistBothSide_(gen_);
-        auxForce[2] = uniDistBothSide_(gen_);
+        auxForce[2] = -1 * uniDist_(gen_);
         auxForce = auxForce / (auxForce.norm() + 1e-5);
         externalForceCount++;}
 
@@ -425,14 +426,14 @@ class PretrainingAnymalController_20233319 {
       }
       else{
         checkcommandPointSuccess();
-        if(currentTime_ > 3.0){
+//        if(currentTime_ > 3.0){
 //          if(curriculumLevel < 100) {
 //            if (checkcommandPointSuccess(true) == 1) changeGoal = true;
 //          }
 //          else{
-          if (checkcommandPointSuccess(true) == 1 && commandPointCount == 1) changeGoal = true;
+//          if (checkcommandPointSuccess(true) == 1 && commandPointCount == 2) changeGoal = true;
 //          }
-        }
+//        }
       }
     }
   }
@@ -522,11 +523,13 @@ class PretrainingAnymalController_20233319 {
   int checkcommandPointSuccess(bool isvalidation=false){
     if((gc_.head(3) - globalCommandPoint.head(3)).norm() < 0.2) {
       continuousGoalCount++;
+      if(maxContinuousGoalCount < continuousGoalCount) maxContinuousGoalCount = continuousGoalCount;
     }
     else{
+      if(maxContinuousGoalCount < continuousGoalCount) maxContinuousGoalCount = continuousGoalCount;
       continuousGoalCount = 0;
     }
-    if(isvalidation && continuousGoalCount > 100){
+    if(isvalidation && maxContinuousGoalCount > 200){
       commandSuccessCount++;
       if(commandSuccessCount > 2) commandSuccessCount = 2;
       return 1;
@@ -561,6 +564,7 @@ class PretrainingAnymalController_20233319 {
   int commandPointCount = 0;
   int commandSuccessCount = 0;
   int continuousGoalCount = 0;
+  int maxContinuousGoalCount = 0;
   bool changeGoal = false;
 
  private:

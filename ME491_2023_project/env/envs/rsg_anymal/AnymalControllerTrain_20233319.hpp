@@ -108,6 +108,9 @@ class AnymalControllerTrain_20233319 {
     pTarget12_ = pTarget12_.cwiseProduct(actionStd_);
     pTarget12_ += actionMean_;
     pTarget_.tail(nJoints_) = pTarget12_;
+
+     pTarget_.tail(nJoints_) = actionMean_;
+
     anymal_->setPdTarget(pTarget_, vTarget_);
 
 

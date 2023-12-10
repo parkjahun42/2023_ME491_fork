@@ -42,8 +42,18 @@ class VectorizedEnvironment {
 
     environments_.reserve(num_envs_);
     rewardInformation_.reserve(num_envs_);
+
+    mode_.setZero(5); // PD, ME, Sphere, Mugisung, Box
+    mode_ << 0.0, 0.0, 0.8, 0.0, 0.2;
+    curriculumLevel_.setZero(num_envs_);
     for (int i = 0; i < num_envs_; i++) {
-      environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0));
+      if(i < mode_[0] * num_envs_) environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, 0, 0));
+      else if(i < (mode_[0] + mode_[1]) * num_envs_) environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, 1, 0));
+      else if(i < (mode_[0] + mode_[1] + mode_[2]) * num_envs_) environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, 2, 0));
+      else if(i < (mode_[0] + mode_[1] + mode_[2] + mode_[3]) * num_envs_) environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, 3, 0));
+      else if(i < (mode_[0] + mode_[1] + mode_[2] + mode_[3] + mode_[4]) * num_envs_) environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, 4, -1));
+
+//      environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0));
       environments_.back()->setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
       environments_.back()->setControlTimeStep(cfg_["control_dt"].template As<double>());
       rewardInformation_.push_back(environments_.back()->getRewards().getStdMap());
@@ -66,6 +76,10 @@ class VectorizedEnvironment {
       obVar_.setOnes(obDim_);
       opponentObMean_.setZero(opponentObDim_);
       opponentObVar_.setOnes(opponentObDim_);
+      opponentOb2Mean_.setZero(opponentObDim_);
+      opponentOb2Var_.setOnes(opponentObDim_);
+      opponentOb3Mean_.setZero(opponentObDim_);
+      opponentOb3Var_.setOnes(opponentObDim_);
       recentMean_.setZero(obDim_);
       recentVar_.setZero(obDim_);
       delta_.setZero(obDim_);
@@ -110,6 +124,10 @@ class VectorizedEnvironment {
     obMean_ = mean; obVar_ = var; obCount_ = count; }
   void setOpponentObStatistics(Eigen::Ref<EigenVec> &mean, Eigen::Ref<EigenVec> &var, float count) {
     opponentObMean_ = mean; opponentObVar_ = var;}
+  void setOpponentObStatistics2(Eigen::Ref<EigenVec> &mean, Eigen::Ref<EigenVec> &var, float count) {
+    opponentOb2Mean_ = mean; opponentOb2Var_ = var;}
+  void setOpponentObStatistics3(Eigen::Ref<EigenVec> &mean, Eigen::Ref<EigenVec> &var, float count) {
+    opponentOb3Mean_ = mean; opponentOb3Var_ = var;}
 
   void setSeed(int seed) {
     int seed_inc = seed;
@@ -131,6 +149,61 @@ class VectorizedEnvironment {
     }
   }
 
+  void setMode() {
+#pragma omp parallel for schedule(auto)
+    for (int i = 0; i < num_envs_; i++) {
+      environments_[i]->setCurriculumLevelZero();
+      curriculumLevel_[i] = 0;
+      if(i < mode_[0] * num_envs_) environments_[i]->setOpponentMode(0);
+      else if(i < (mode_[0] + mode_[1]) * num_envs_) environments_[i]->setOpponentMode(1);
+      else if(i < (mode_[0] + mode_[1] + mode_[2]) * num_envs_) environments_[i]->setOpponentMode(2);
+      else if(i < (mode_[0] + mode_[1] + mode_[2] + mode_[3]) * num_envs_) environments_[i]->setOpponentMode(3);
+      else if(i < (mode_[0] + mode_[1] + mode_[2] + mode_[3] + mode_[4]) * num_envs_) environments_[i]->setOpponentMode(4);
+    }
+  }
+
+
+
+  void checkCurriculum() {
+    if(modeLevel == 0) {
+      if (curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() > 10){
+        mode_ << 0.0, 0.0, 0.8, 0.0, 0.2;
+        modeLevel++;
+        setMode();
+      }
+    }
+    else if(modeLevel == 1)
+    {
+      std::cout << curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() << std::endl;
+      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 150 && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 150){
+        mode_ << 0.1, 0.2, 0.25, 0.25, 0.2;
+//        modeLevel++;
+        setMode();
+      }
+    }
+    else if(modeLevel == 2)
+    {
+      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 250 && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 250){
+        mode_ << 0.0, 0.5, 0.2, 0.1, 0.2;
+        modeLevel++;
+        setMode();
+      }
+    }
+    else if(modeLevel == 3)
+    {
+      if (curriculumLevel_.segment((int)((mode_[0]) * num_envs_), (int)((mode_[1]) * num_envs_)).mean() > 150){
+        mode_ << 0.0, 0.75, 0.0, 0.05, 0.2;
+        modeLevel++;
+        setMode();
+      }
+    }
+
+  }
+
+  void getCurrLevel(Eigen::Ref<EigenVec> &currLevel) {
+    currLevel = curriculumLevel_;
+  }
+
   void setSimulationTimeStep(double dt) {
     for (auto *env: environments_)
       env->setSimulationTimeStep(dt);
@@ -144,12 +217,19 @@ class VectorizedEnvironment {
   int getObDim() { return obDim_; }
   int getOpponentObDim() { return opponentObDim_; }
   int getActionDim() { return actionDim_; }
+  int getModeNum() { return mode_.size(); }
+  int getModeLevel() {return modeLevel; }
   int getNumOfEnvs() { return num_envs_; }
 
   ////// optional methods //////
   void curriculumUpdate(int iter) {
     for (auto *env: environments_)
       env->curriculumUpdate(iter);
+  }
+
+  void modeUpdate(Eigen::Ref<EigenVec> &mode)
+  {
+    mode = mode_;
   }
 
   const std::vector<std::map<std::string, float>>& getRewardInfo() { return rewardInformation_; }
@@ -174,7 +254,15 @@ class VectorizedEnvironment {
 #pragma omp parallel for schedule(auto)
     for(int i=0; i<num_envs_; i++) {
       ob.row(i) = (ob.row(i) - obMean_.transpose()).template cwiseQuotient<>((obVar_ + epsilon).cwiseSqrt().transpose());
-      opponent_ob.row(i) = (opponent_ob.row(i) - opponentObMean_.transpose()).template cwiseQuotient<>((opponentObVar_ + epsilon).cwiseSqrt().transpose());
+      if(i < (mode_[0] + mode_[1]) * num_envs_){
+        opponent_ob.row(i) = (opponent_ob.row(i) - opponentObMean_.transpose()).template cwiseQuotient<>((opponentObVar_ + epsilon).cwiseSqrt().transpose());;
+      }
+      else if(i < (mode_[0] + mode_[1] + mode_[2]) * num_envs_) {
+        opponent_ob.row(i) = (opponent_ob.row(i) - opponentOb2Mean_.transpose()).template cwiseQuotient<>((opponentOb2Var_ + epsilon).cwiseSqrt().transpose());
+      }
+      else if(i < (mode_[0] + mode_[1] + mode_[2] + mode_[3]) * num_envs_){
+        opponent_ob.row(i) = (opponent_ob.row(i) - opponentOb3Mean_.transpose()).template cwiseQuotient<>((opponentOb3Var_ + epsilon).cwiseSqrt().transpose());
+      }
     }
   }
 
@@ -193,6 +281,7 @@ class VectorizedEnvironment {
       environments_[agentId]->reset();
       reward[agentId] += terminalReward;
     }
+    curriculumLevel_[agentId] = environments_[agentId]->getCurriculumLevel();
   }
 
   std::vector<ChildEnvironment *> environments_;
@@ -207,11 +296,13 @@ class VectorizedEnvironment {
 
   /// observation running mean
   bool normalizeObservation_ = true;
-  EigenVec obMean_, opponentObMean_;
-  EigenVec obVar_, opponentObVar_;
+  EigenVec obMean_, opponentObMean_, opponentOb2Mean_, opponentOb3Mean_;
+  EigenVec obVar_, opponentObVar_, opponentOb2Var_, opponentOb3Var_;
   float obCount_ = 1e-4;
   EigenVec recentMean_, recentVar_, delta_;
   EigenVec epsilon;
+  EigenVec mode_, curriculumLevel_;
+  int modeLevel = 0;
 };
 
 

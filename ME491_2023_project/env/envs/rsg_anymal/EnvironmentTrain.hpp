@@ -27,7 +27,7 @@ class ENVIRONMENT {
 
  public:
 
-  explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable) :
+  explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg, bool visualizable, int mode, int init_mode) :
       visualizable_(visualizable) {
     /// add objects
     auto* robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_blue.urdf");
@@ -37,12 +37,23 @@ class ENVIRONMENT {
     controller_.setPlayerNum(0);
     robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
 
-    auto* opponent_robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_red.urdf");
+    raisim::ArticulatedSystem* opponent_robot;
+
+    if(init_mode == 0){
+      opponent_robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_red.urdf");
+    }
+    else if(init_mode == -1){
+      opponent_robot = world_.addArticulatedSystem(resourceDir + "/anymal/urdf/anymal_red_big.urdf");
+    }
+
     opponent_robot->setName(PLAYER2_NAME);
     opponent_controller_.setName(PLAYER2_NAME);
     opponent_controller_.setOpponentName(PLAYER1_NAME);
     opponent_controller_.setPlayerNum(1);
+    opponent_controller_.setOpponentMode(mode);
+    opponent_controller_.setOpponentInitMode(init_mode);
     opponent_robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
+
 
     controller_.setCageRadius(cage_radius_);
     opponent_controller_.setCageRadius(cage_radius_);
@@ -102,7 +113,7 @@ class ENVIRONMENT {
 
     if(visualizable_){
       cage_->setCylinderSize(cage_radius_, 0.05);
-//      commandSphere_->setPosition(opponent_controller_.globalCommandPoint);
+      commandSphere_->setPosition(opponent_controller_.globalCommandPoint);
     }
 
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
@@ -157,9 +168,12 @@ class ENVIRONMENT {
     auto anymal = reinterpret_cast<raisim::ArticulatedSystem *>(world_.getObject(PLAYER2_NAME));
     /// base contact with ground
     for(auto& contact: anymal->getContacts()) {
-      if(contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld() &&
-          contact.getlocalBodyIndex() == anymal->getBodyIdx("base")) {
-        return true;
+      if(opponent_mode_ != 4) {
+        if (contact.getPairObjectIndex() == world_.getObject("ground")->getIndexInWorld() &&
+            contact.getlocalBodyIndex() == anymal->getBodyIdx("base")) {
+          if(visualizable_) std::cout << "base contact!" << std::endl;
+          return true;
+        }
       }
     }
     /// get out of the cage
@@ -168,6 +182,7 @@ class ENVIRONMENT {
     gc.setZero(gcDim);
     gc = anymal->getGeneralizedCoordinate().e();
     if (gc.head(2).norm() > cage_radius_) {
+      if(visualizable_) std::cout << "out!" << std::endl;
       return true;
     }
     return false;
@@ -186,18 +201,27 @@ class ENVIRONMENT {
     }
 
     if (timer_ > 10 * 100) {
+      if(visualizable_) std::cout << "timeout" << std::endl;
       terminalReward = -4.f;
       return true;
     }
 
 
     if (!player1_die() && player2_die()) {
+      if(visualizable_) std::cout << "player2 die" << std::endl;
       terminalReward = -terminalRewardCoeff_;
+      opponent_controller_.curriculumLevel += 1;
+      opponent_controller_.curriculumLevelUpdate();
       return true;
     }
 
     if (player1_die() && !player2_die()) {
+        if(visualizable_) std::cout << "player1 die" << std::endl;
       terminalReward = terminalRewardCoeff_;
+      if(timer_ < 3 * 100) {
+        opponent_controller_.curriculumLevel -= 1;
+        opponent_controller_.curriculumLevelUpdate();
+      }
       return true;
     }
     return false;
@@ -219,11 +243,24 @@ class ENVIRONMENT {
   }
   void setControlTimeStep(double dt) { control_dt_ = dt; }
 
+  void setOpponentMode(int mode) {
+    opponent_mode_ = mode;
+    opponent_controller_.setOpponentMode(mode);
+  }
+
+  int getCurriculumLevel(int level) {
+    return opponent_controller_.curriculumLevel;
+  }
+
   int getObDim() { return controller_.getObDim(); }
 
   int getOpponentObDim() { return opponent_controller_.getObDim(); }
 
   int getActionDim() { return controller_.getActionDim(); }
+
+  int getCurriculumLevel() { return opponent_controller_.curriculumLevel; }
+
+  void setCurriculumLevelZero() { opponent_controller_.curriculumLevel = 0; }
 
   double getControlTimeStep() { return control_dt_; }
 
@@ -243,8 +280,12 @@ class ENVIRONMENT {
 
  private:
   int timer_ = 0;
+  int opponent_mode_ = 0;
   bool visualizable_ = false;
   double terminalRewardCoeff_ = -10.;
+
+  int gameCount_ = 0;
+
   PLAYER1_CONTROLLER controller_;
   PLAYER2_CONTROLLER opponent_controller_;
   raisim::World world_;
