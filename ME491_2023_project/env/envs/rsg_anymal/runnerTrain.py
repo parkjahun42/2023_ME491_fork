@@ -139,6 +139,7 @@ if not is_pretrain and opponent_weight_path != '':
 
 num_envs = cfg['environment']['num_envs']
 check_me_first = False
+first_update = 0
 for update in range(1000000):
     start = time.time()
     reward_sum = 0
@@ -154,15 +155,16 @@ for update in range(1000000):
     modeCurr2 = currLevel[(int)(num_envs * (mode[0] + mode[1])):(int)(num_envs * (mode[0] + mode[1] + mode[2]))].mean()
     modeCurr3 = currLevel[(int)(num_envs * (mode[0] + mode[1] + mode[2])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3]))].mean()
     modeCurr4 = currLevel[(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3] + mode[4]))].mean()
-    if modeLevel == 1 and modeCurr2 > 100:
+    if (modeLevel == 0 or modeLevel == 1) and modeCurr2 > 100:
         load_opponent_param(opponent_weight_path2, env, opponent_actor2, saver.data_dir, 2, 4000)
     if modeLevel > 1:
         if check_me_first == False:
-            load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update)
+            first_update = update - update%100
+            load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, first_update)
             check_me_first = True
         else:
             if(update % 100 == 0 and update > 500):
-                load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update-500)
+                load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, first_update-500)
 
     if update % cfg['environment']['eval_every_n'] == 0:
         env.reset()
