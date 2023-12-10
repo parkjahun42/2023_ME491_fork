@@ -164,7 +164,9 @@ for update in range(1000000):
             check_me_first = True
         else:
             if(update % 100 == 0 and update > 500):
+                first_update = update - update % 100
                 load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, first_update-500)
+
 
     if update % cfg['environment']['eval_every_n'] == 0:
         env.reset()
