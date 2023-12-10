@@ -109,8 +109,6 @@ class AnymalControllerTrain_20233319 {
     pTarget12_ += actionMean_;
     pTarget_.tail(nJoints_) = pTarget12_;
 
-     pTarget_.tail(nJoints_) = actionMean_;
-
     anymal_->setPdTarget(pTarget_, vTarget_);
 
 
@@ -250,10 +248,10 @@ class AnymalControllerTrain_20233319 {
     quat[3] = gc_[6];
     raisim::quatToRotMat(quat, rot);
 
-    Eigen::Vector3d targetVector = rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)) / (opponent_gc_.head(3) - gc_.head(3)).norm();
+    Eigen::Vector3d targetVector = (opponent_gc_.head(3) - gc_.head(3)) / (opponent_gc_.head(3) - gc_.head(3)).norm();
 
     rewMove2Opponent_ = exp(poseError / 3) - 1;
-    rewForwardVel_ = exp(-(bodyLinearVel_.head(2) / (bodyLinearVel_.head(2).norm() + 1e-5)  - targetVector.head(2)).squaredNorm() / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
+    rewForwardVel_ = exp(-(gv_.head(2) / (gv_.head(2).norm() + 1e-5)  - targetVector.head(2)).squaredNorm() / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
     rewTorque_ = anymal_->getGeneralizedForce().squaredNorm();
     rewTakeGoodPose = std::max((cage2base_pos_xy_.norm() - opponent_cage2base_pos_xy_.norm()), 0.0);
     rewOpponent2CageDist_ = std::max(0.0, (opponent_cage2base_pos_xy_).norm()-opponent_gc_init_.head(2).norm()) / (cage_radius_-opponent_gc_init_.head(2).norm());

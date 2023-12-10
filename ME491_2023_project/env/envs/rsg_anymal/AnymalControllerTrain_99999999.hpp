@@ -161,10 +161,11 @@ class AnymalControllerTrain_99999999{
 
     if(israndomizeOpponentExtForce) randomizeExtForce(world);
 
-    if(isopponentMassCurriculum) opponentMassCurriculum();
+    if(opponent_mode_ == 4) {
+      if (isopponentMassCurriculum) opponentMassCurriculum();
 
-    if(isOpponentBaseCollisionCurriculum) opponentBaseCollisionCurriculum();
-
+      if (isOpponentBaseCollisionCurriculum) opponentBaseCollisionCurriculum();
+    }
     anymal_->setState(gc_init_, gv_init_);
 
     if(israndomizeGcGvInit) randomizeGcGvInit();
@@ -638,10 +639,10 @@ class AnymalControllerTrain_99999999{
   bool israndomizeOpponentPosition = true;
   bool israndomizeOpponentExtForce = false;
   bool isOpponentPosCurriculum = false;
-  bool isopponentMassCurriculum = false;
+  bool isopponentMassCurriculum = true; //Only for 4
   bool isCageRadiusCurriculum = false;
   bool israndomizeGcGvInit = false;
-  bool isOpponentBaseCollisionCurriculum = false;
+  bool isOpponentBaseCollisionCurriculum = true; //Only for 4
 
   double cageRadiusCurriculumIter = 1000.;
 

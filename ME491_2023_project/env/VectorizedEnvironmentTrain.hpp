@@ -44,7 +44,7 @@ class VectorizedEnvironment {
     rewardInformation_.reserve(num_envs_);
 
     mode_.setZero(5); // PD, ME, Sphere, Mugisung, Box
-    mode_ << 0.0, 0.0, 0.8, 0.0, 0.2;
+    mode_ << 0.75, 0.0, 0.05, 0.0, 0.2;
     curriculumLevel_.setZero(num_envs_);
     for (int i = 0; i < num_envs_; i++) {
       if(i < mode_[0] * num_envs_) environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0, 0, 0));
@@ -152,8 +152,6 @@ class VectorizedEnvironment {
   void setMode() {
 #pragma omp parallel for schedule(auto)
     for (int i = 0; i < num_envs_; i++) {
-      environments_[i]->setCurriculumLevelZero();
-      curriculumLevel_[i] = 0;
       if(i < mode_[0] * num_envs_) environments_[i]->setOpponentMode(0);
       else if(i < (mode_[0] + mode_[1]) * num_envs_) environments_[i]->setOpponentMode(1);
       else if(i < (mode_[0] + mode_[1] + mode_[2]) * num_envs_) environments_[i]->setOpponentMode(2);
@@ -165,26 +163,59 @@ class VectorizedEnvironment {
 
 
   void checkCurriculum() {
+//    std::cout << curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() << std::endl;
     if(modeLevel == 0) {
-      if (curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() > 10){
-        mode_ << 0.0, 0.0, 0.8, 0.0, 0.2;
-        modeLevel++;
+      if (curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() > 100){
+        if(mode_[0] < 0.2)
+        {
+          #pragma omp parallel for schedule(auto)
+          for (int i = 0; i < num_envs_; i++) {
+            if(i < (int)(mode_[0] * num_envs_)) environments_[i]->setCurriculumLevelZero();
+          }
+          mode_ << 0.0, 0.0, 0.8, 0.0, 0.2;
+          modeLevel++;
+          setMode();
+        }
+        #pragma omp parallel for schedule(auto)
+        for (int i = 0; i < num_envs_; i++) {
+          if(i < (int)(mode_[0] * num_envs_)) environments_[i]->setCurriculumLevelZero();
+        }
+        mode_[0] -= 0.1;
+        mode_[2] += 0.1;
+//        environments_[0]-> visualizable_ = false;
+//        environments_[(int)((mode_[0] + mode_[1])*num_envs_ +1)]-> visualizable_ = true;
+
+
         setMode();
       }
+
+//      if (curriculumLevel_.head((int)(mode_[0] * num_envs_)).mean() > 150){
+//        mode_ << 0.0, 0.0, 0.8, 0.0, 0.2;
+////        environments_[0]-> visualizable_ = false;
+////        environments_[(int)((mode_[0] + mode_[1])*num_envs_ +1)]-> visualizable_ = true;
+//        modeLevel++;
+//        setMode();
+//      }
     }
     else if(modeLevel == 1)
     {
-      std::cout << curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() << std::endl;
-      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 150 && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 150){
-        mode_ << 0.1, 0.2, 0.25, 0.25, 0.2;
-//        modeLevel++;
+//      std::cout << curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() << std::endl;
+      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 100){ //&& curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 150){
+        #pragma omp parallel for schedule(auto)
+        for (int i = 0; i < num_envs_; i++) {
+          if(i < (int)((mode_[0]+mode_[1]+mode_[2]) * num_envs_)) environments_[i]->setCurriculumLevelZero();
+        }
+        mode_ << 0.0, 0.1, 0.7, 0.0, 0.2;
+        modeLevel++;
         setMode();
       }
     }
     else if(modeLevel == 2)
     {
-      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 250 && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 250){
-        mode_ << 0.0, 0.5, 0.2, 0.1, 0.2;
+      if (curriculumLevel_.segment((int)((mode_[0] + mode_[1]) * num_envs_), (int)((mode_[2]) * num_envs_)).mean() > 250){ // && curriculumLevel_.segment((int)((mode_[0] + mode_[1] + mode_[2]) * num_envs_), (int)((mode_[3]) * num_envs_)).mean() > 250){
+        mode_ << 0.0, 0.5, 0.3, 0.0, 0.2;
+//        environments_[0]-> visualizable_ = true;
+//        environments_[(int)((0.4)*num_envs_ +1)]-> visualizable_ = false;
         modeLevel++;
         setMode();
       }

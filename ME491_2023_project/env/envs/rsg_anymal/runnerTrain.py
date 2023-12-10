@@ -148,9 +148,17 @@ for update in range(1000000):
     env.check_curriculum()
     mode = env.mode_callback()
     modeLevel = env.mode_level_callback()
+    currLevel = env.get_curriculum_level()
+    modeCurr0 = currLevel[:(int)(num_envs * (mode[0]))].mean()
+    modeCurr1 = currLevel[(int)(num_envs * mode[0]):(int)(num_envs * (mode[0] + mode[1]))].mean()
+    modeCurr2 = currLevel[(int)(num_envs * (mode[0] + mode[1])):(int)(num_envs * (mode[0] + mode[1] + mode[2]))].mean()
+    modeCurr3 = currLevel[(int)(num_envs * (mode[0] + mode[1] + mode[2])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3]))].mean()
+    modeCurr4 = currLevel[(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3])):(int)(num_envs * (mode[0] + mode[1] + mode[2] + mode[3] + mode[4]))].mean()
+    if modeLevel == 1 and modeCurr2 > 100:
+        load_opponent_param(opponent_weight_path2, env, opponent_actor2, saver.data_dir, 2, 4000)
     if modeLevel > 1:
         if check_me_first == False:
-            load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update-500)
+            load_opponent_param(saver.data_dir+"/full_"+str(update)+'.pt', env, opponent_actor, saver.data_dir, 1, update)
             check_me_first = True
         else:
             if(update % 100 == 0 and update > 1000):
@@ -204,7 +212,7 @@ for update in range(1000000):
         env.save_scaling(saver.data_dir, str(update))
 
     # actual training
-    if update % 1 < 2:
+    if update % 20 < 2:
         env.turn_on_visualization()
     else:
         env.turn_off_visualization()
@@ -263,4 +271,6 @@ for update in range(1000000):
     print('{:<40} {:>6}'.format("real time factor: ", '{:6.0f}'.format(total_steps / (end - start)
                                                                        * cfg['environment']['control_dt'])))
     print('{:<40} {:>6}'.format("mode level: ", '{:6.0f}'.format(modeLevel)))
+    print('{:<1} {:>0} {:<1} {:>0} {:<1} {:>0} {:<1} {:>0} {:<1} {:>0}'.format("mode prob 0: ", '{:3.2f}'.format(mode[0]), "1: ", '{:3.2f}'.format(mode[1]), "2: ", '{:3.2f}'.format(mode[2]), "3: ", '{:3.2f}'.format(mode[3]), "4: ", '{:3.2f}'.format(mode[4])))
+    print('{:<1} {:>0} {:<1} {:>0} {:<1} {:>0} {:<1} {:>0} {:<1} {:>0}'.format("Curr level 0: ", '{:3.2f}'.format(modeCurr0), "1: ", '{:3.2f}'.format(modeCurr1), "2: ", '{:3.2f}'.format(modeCurr2), "3: ", '{:3.2f}'.format(modeCurr3), "4: ", '{:3.2f}'.format(modeCurr4)))
     print('----------------------------------------------------\n')

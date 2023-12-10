@@ -20,7 +20,7 @@ class RaisimGymVecEnvTrain:
         self.opponent_num_obs = self.wrapper.getOpponentObDim()
         self.num_acts = self.wrapper.getActionDim()
         self.num_mode = self.wrapper.getModeNum()
-        self.curriculum_level = np.zeros(self.num_envs, dtype=np.int32)
+        self.curriculum_level = np.zeros(self.num_envs, dtype=np.float32)
         self._mode = np.zeros(self.num_mode, dtype=np.float32)
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
         self._opponent_observation = np.zeros([self.num_envs, self.opponent_num_obs], dtype=np.float32)
