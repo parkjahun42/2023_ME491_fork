@@ -33,10 +33,11 @@ environment:
     jointPosition:
       coeff: 0.0
     baseHeight:
-      coeff: -0.01
+      coeff: -0.00
     curriculumLevel:
       coeff: 1e-8
-
+    attacky:
+      coeff: -0.1
 
 evaluation:
   iteration: 10000 #Write your final submit policy iteration. ex) if you submit full_10000.pt

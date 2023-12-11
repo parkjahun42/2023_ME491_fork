@@ -74,7 +74,7 @@ class AnymalControllerTrain_20233319 {
 
     /// MUST BE DONE FOR ALL ENVIRONMENTS
     obDim_ = 120;
-    realObDim_ = 99;
+    realObDim_ = 111;
     actionDim_ = nJoints_;
     actionMean_.setZero(actionDim_);
     actionStd_.setZero(actionDim_);
@@ -200,6 +200,8 @@ class AnymalControllerTrain_20233319 {
 
     obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
                  gc_[2], /// body pose 1
+                 rot.e().row(0).transpose(),
+                 rot.e().row(1).transpose(),
                  rot.e().row(2).transpose(), /// body orientation 3
                  gc_.tail(12), /// joint angles 12
                  gv_.tail(12), /// joint velocity 12
@@ -210,6 +212,8 @@ class AnymalControllerTrain_20233319 {
                 //opponent related data
                 opponent_bodyLinearVel_, opponent_bodyAngularVel_, /// opponent body linear&angular velocity 6.
                 rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)), /// Relative opponent player xyz position 3
+                opponent_rot.e().row(0).transpose(),
+                opponent_rot.e().row(1).transpose(),
                 opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
                 opponent_gc_.tail(12), /// opponent joint angles 12
                 opponent_gv_.tail(12), /// opponent joint velocity 12
@@ -248,7 +252,18 @@ class AnymalControllerTrain_20233319 {
     quat[3] = gc_[6];
     raisim::quatToRotMat(quat, rot);
 
+    raisim::Vec<4> opponent_quat;
+    raisim::Mat<3, 3> opponent_rot;
+    opponent_quat[0] = opponent_gc_[3];
+    opponent_quat[1] = opponent_gc_[4];
+    opponent_quat[2] = opponent_gc_[5];
+    opponent_quat[3] = opponent_gc_[6];
+    raisim::quatToRotMat(opponent_quat, opponent_rot);
+
     Eigen::Vector3d targetVector = (opponent_gc_.head(3) - gc_.head(3)) / (opponent_gc_.head(3) - gc_.head(3)).norm();
+
+    Eigen::Vector3d a = opponent_rot.e().transpose() * (opponent_gc_.head(3));
+    Eigen::Vector3d b = rot.e().transpose() * (gc_.head(3));
 
     rewMove2Opponent_ = exp(poseError / 3) - 1;
     rewForwardVel_ = exp(-(gv_.head(2) / (gv_.head(2).norm() + 1e-5)  - targetVector.head(2)).squaredNorm() / 0.25); // std::min(0.5, (gv_.head(2) - targetVector.head(2)*0.5).norm());
@@ -259,7 +274,7 @@ class AnymalControllerTrain_20233319 {
     rewBaseMotion_ = (0.8 * bodyLinearVel_[2] * bodyLinearVel_[2] + 0.4* fabs(bodyAngularVel_[0]) + 0.4 * fabs(bodyAngularVel_[1]));
     rewJointPosition = (gc_.tail(nJoints_) - gc_init_.tail(nJoints_)).norm();
     rewBaseHeight = pow((gc_[2] - gc_init_[2]),2);
-
+    rewattacky = pow(a.dot(b), 2) * std::max(1.0, 1/(poseError+1e-5));
     //opponent_gc_init_.head(2) << opponent_cage2base_pos_xy_;
 
     rewards->record("forwardVel", rewForwardVel_);
@@ -272,6 +287,7 @@ class AnymalControllerTrain_20233319 {
     rewards->record("jointPosition", rewJointPosition);
     rewards->record("baseHeight", rewBaseHeight);
     rewards->record("curriculumLevel", curriculumLevel);
+    rewards->record("attacky", rewattacky);
   }
 
   inline const Eigen::VectorXd &getObservation() {
@@ -440,7 +456,7 @@ class AnymalControllerTrain_20233319 {
 
   //RewardRelated
   double rewForwardVel_ = 0., rewMove2Opponent_ = 0., rewTorque_ = 0., rewTakeGoodPose = 0., rewOpponent2CageDist_ = 0., rewPushOpponentOff_ = 0., rewBaseMotion_=0.,
-          rewJointPosition = 0., rewBaseHeight=0.;
+          rewJointPosition = 0., rewBaseHeight=0., rewattacky=0.;
 
   thread_local static std::uniform_real_distribution<double> uniDist_;
   thread_local static std::uniform_real_distribution<double> uniDistCage_;

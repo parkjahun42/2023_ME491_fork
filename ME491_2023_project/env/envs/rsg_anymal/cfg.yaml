@@ -31,11 +31,13 @@ environment:
     baseMotion:
       coeff: 0.0
     jointPosition:
-      coeff: -0.005
+      coeff: -0.000
     baseHeight:
       coeff: 0.0
     curriculumLevel:
       coeff: 1e-8
+    attacky:
+      coeff: -0.1
 
 
 evaluation:

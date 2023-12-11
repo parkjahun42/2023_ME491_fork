@@ -123,7 +123,7 @@ class AnymalControllerTrain_99999999{
     anymal_->setPdTarget(pTarget_, vTarget_);
 //    opponent_->setP..   dTarget(actionMean_, vTarget_);
 
-    if(israndomizeOpponentExtForce) randomizeExtForce(world);
+    if(opponent_mode_ == 4) if(israndomizeOpponentExtForce) randomizeExtForce(world);
 
     if(opponent_mode_ == 2) commandPointUpdate();
 
@@ -159,9 +159,11 @@ class AnymalControllerTrain_99999999{
 
     if(israndomizeOpponentPosition) randomizeOpponentPosition(world, theta);
 
-    if(israndomizeOpponentExtForce) randomizeExtForce(world);
+
 
     if(opponent_mode_ == 4) {
+      if(israndomizeOpponentExtForce) randomizeExtForce(world);
+
       if (isopponentMassCurriculum) opponentMassCurriculum();
 
       if (isOpponentBaseCollisionCurriculum) opponentBaseCollisionCurriculum();
@@ -541,7 +543,7 @@ class AnymalControllerTrain_99999999{
   void opponentMassCurriculum(){
     double currentLevelScale = std::min(1.0 , ((double)curriculumLevel - (double)(massCurriculumStart) / ((double)(massCurriculumEnd) - (double)(massCurriculumStart))));
     for (int i = 0; i < bodyNames.size(); i++) {
-        anymal_->setMass(i, 0.5 * bodyMasses(i) + 0.5 * bodyMasses(i) * currentLevelScale);
+        anymal_->setMass(i, 0.5 * bodyMasses(i) + 0.8 * bodyMasses(i) * currentLevelScale);
       }
 //
 //    anymal_->setMass(0, 5.0 + 15.0 * std::min(1.0 , ((double)curriculumLevel - (double)(massCurriculumStart) / ((double)(massCurriculumEnd) - (double)(massCurriculumStart)))));
@@ -592,21 +594,26 @@ class AnymalControllerTrain_99999999{
       if(changeGoal) {
         commandPointCount++;
         double prob = uniDist_(gen_);
-        if(prob < 0.9) {
+        if(prob < 0.3) {
           globalCommandPoint(0) = uniDistBothSide_(gen_);
           globalCommandPoint(1) = uniDistBothSide_(gen_);
           globalCommandPoint(2) = 0.0;
           globalCommandPoint = uniDist_(gen_) * cage_radius_ * 0.6 * globalCommandPoint / (globalCommandPoint.norm() + 1e-5);
           globalCommandPoint(2) = 0.5;
         }
-        else if(prob > 0.1){
+        else if(prob < 0.9){
+            globalCommandPoint(0) = opponent_cage2base_pos_xy_(0);
+            globalCommandPoint(1) = opponent_cage2base_pos_xy_(1);
+            globalCommandPoint(2) = 0.5;
+        }
+        else if(prob < 1.0){
           globalCommandPoint << 0.0, 0.0, 0.5;
         }
         changeGoal = false;
       }
       else{
         checkcommandPointSuccess();
-        if(currentTime_ > 3.0){
+        if((int)(currentTime_ * 100) %  100 == 0){
 //          if(curriculumLevel < 100) {
 //            if (checkcommandPointSuccess(true) == 1) changeGoal = true;
 //          }
