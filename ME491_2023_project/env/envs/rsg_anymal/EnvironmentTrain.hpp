@@ -54,6 +54,7 @@ class ENVIRONMENT {
     opponent_controller_.setOpponentInitMode(init_mode);
     opponent_robot->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
 
+    opponent_mode_ = mode;
 
     controller_.setCageRadius(cage_radius_);
     opponent_controller_.setCageRadius(cage_radius_);

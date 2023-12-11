@@ -167,7 +167,7 @@ for update in range(1000000):
         else:
             if(update % 100 == 0 and update > 500 and first_update - 300 > 500):
                 first_update = update - update % 100 - 100
-                load_opponent_param(saver.data_dir+"/full_"+str(first_update)+'.pt', env, opponent_actor, saver.data_dir, 1, first_update-300)
+                load_opponent_param(saver.data_dir+"/full_"+str(first_update-300)+'.pt', env, opponent_actor, saver.data_dir, 1, first_update-300)
 
 
     if update % cfg['environment']['eval_every_n'] == 0:
@@ -186,7 +186,7 @@ for update in range(1000000):
         env.turn_on_visualization()
         env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
-        for step in range(n_steps*2):
+        for step in range(n_steps):
             with torch.no_grad():
                 frame_start = time.time()
                 if is_pretrain:

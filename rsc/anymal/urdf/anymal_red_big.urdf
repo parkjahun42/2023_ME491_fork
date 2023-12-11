@@ -55,7 +55,7 @@
         </visual>
         <!-- Main Body -->
         <collision>
-            <origin rpy="0 0 0" xyz="0 0 0.08"/>
+            <origin rpy="0 0 0" xyz="0 0 -0.15"/>
             <geometry>
                 <box size="0.531 0.27 0.24"/>
                 <!--<box size="1.0 1.0 0.4"/>-->

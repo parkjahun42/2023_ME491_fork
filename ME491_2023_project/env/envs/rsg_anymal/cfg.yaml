@@ -7,7 +7,7 @@ training:
 environment:
   render: True
   num_envs: 100
-  eval_every_n: 100
+  eval_every_n: 200
   analyze_freq: 50
   num_threads: 60
   simulation_dt: 0.0025
@@ -31,13 +31,13 @@ environment:
     baseMotion:
       coeff: 0.0
     jointPosition:
-      coeff: -0.000
+      coeff: -0.005
     baseHeight:
       coeff: 0.0
     curriculumLevel:
       coeff: 1e-8
     attacky:
-      coeff: -0.1
+      coeff: -0.0
 
 
 evaluation:

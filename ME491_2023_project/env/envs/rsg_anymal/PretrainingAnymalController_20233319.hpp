@@ -421,7 +421,7 @@ class PretrainingAnymalController_20233319 {
         globalCommandPoint(1) = uniDistBothSide_(gen_);
         globalCommandPoint(2) = 0.0;
         globalCommandPoint = uniDist_(gen_) * cage_radius_ * 0.99 * globalCommandPoint / (globalCommandPoint.norm() + 1e-5);
-        globalCommandPoint(2) = 0.5;
+        globalCommandPoint(2) = 0.2 + uniDist_(gen_)*0.4;
         changeGoal = false;
       }
       else{

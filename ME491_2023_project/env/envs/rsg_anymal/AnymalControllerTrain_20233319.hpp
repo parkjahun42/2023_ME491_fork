@@ -74,7 +74,7 @@ class AnymalControllerTrain_20233319 {
 
     /// MUST BE DONE FOR ALL ENVIRONMENTS
     obDim_ = 120;
-    realObDim_ = 111;
+    realObDim_ = 99;
     actionDim_ = nJoints_;
     actionMean_.setZero(actionDim_);
     actionStd_.setZero(actionDim_);
@@ -200,8 +200,6 @@ class AnymalControllerTrain_20233319 {
 
     obDouble_ << bodyLinearVel_, bodyAngularVel_, /// body linear&angular velocity 6.
                  gc_[2], /// body pose 1
-                 rot.e().row(0).transpose(),
-                 rot.e().row(1).transpose(),
                  rot.e().row(2).transpose(), /// body orientation 3
                  gc_.tail(12), /// joint angles 12
                  gv_.tail(12), /// joint velocity 12
@@ -212,8 +210,6 @@ class AnymalControllerTrain_20233319 {
                 //opponent related data
                 opponent_bodyLinearVel_, opponent_bodyAngularVel_, /// opponent body linear&angular velocity 6.
                 rot.e().transpose() * (opponent_gc_.head(3) - gc_.head(3)), /// Relative opponent player xyz position 3
-                opponent_rot.e().row(0).transpose(),
-                opponent_rot.e().row(1).transpose(),
                 opponent_rot.e().row(2).transpose(), /// opponent player orientation 3
                 opponent_gc_.tail(12), /// opponent joint angles 12
                 opponent_gv_.tail(12), /// opponent joint velocity 12
@@ -243,7 +239,7 @@ class AnymalControllerTrain_20233319 {
 
   inline void recordReward(Reward *rewards) {
     double poseError = (gc_.head(2) - opponent_gc_.head(2)).squaredNorm() / (gc_init_.head(2) - opponent_gc_init_.head(2)).squaredNorm();
-
+    if((gc_.head(2) - opponent_gc_.head(2)).norm() < 0.2) poseError = 0.;
     raisim::Vec<4> quat;
     raisim::Mat<3, 3> rot;
     quat[0] = gc_[3];

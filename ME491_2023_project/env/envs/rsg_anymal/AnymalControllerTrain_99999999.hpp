@@ -142,8 +142,12 @@ class AnymalControllerTrain_99999999{
     commandSuccessCount = 0;
     commandPointCount = 0;
 
-    if(opponent_mode_ == 1) israndomizeOpponentPosition = false;
+    if(opponent_mode_ == 1) {
+      double prob = uniDist_(gen_);
+      if(prob < 0.9) israndomizeOpponentPosition = false;
+      else israndomizeOpponentPosition = true;
 
+    }
     if (playerNum_ == 0) {
       gc_init_.head(3) << cage_radius_ / 2 * std::cos(theta), cage_radius_ / 2 * std::sin(theta), 0.5;
       gc_init_.segment(3, 4) << cos((theta - M_PI) / 2), 0, 0, sin((theta - M_PI) / 2);
@@ -553,7 +557,7 @@ class AnymalControllerTrain_99999999{
 
     base_collision_size_(0) = 1.0 - (1.0 - 0.537) * std::min(1.0, ((double)(curriculumLevel - opponentBaseCollisionCurriculumStartLevel) / (double)(opponentBaseCollisionCurriculumEndLevel)));
     base_collision_size_(1) = 0.5 - (0.5 - 0.27) * std::min(1.0, ((double)(curriculumLevel - opponentBaseCollisionCurriculumStartLevel) / (double)(opponentBaseCollisionCurriculumEndLevel)));
-    base_collision_size_(2) = 0.4 - (0.4 - 0.24) * std::min(1.0, ((double)(curriculumLevel - opponentBaseCollisionCurriculumStartLevel) / (double)(opponentBaseCollisionCurriculumEndLevel)));
+    base_collision_size_(2) = 0.28 - (0.28 - 0.24) * std::min(1.0, ((double)(curriculumLevel - opponentBaseCollisionCurriculumStartLevel) / (double)(opponentBaseCollisionCurriculumEndLevel)));
     anymal_->setCollisionObjectShapeParameters(0, base_collision_size_);
   }
 
@@ -599,15 +603,15 @@ class AnymalControllerTrain_99999999{
           globalCommandPoint(1) = uniDistBothSide_(gen_);
           globalCommandPoint(2) = 0.0;
           globalCommandPoint = uniDist_(gen_) * cage_radius_ * 0.6 * globalCommandPoint / (globalCommandPoint.norm() + 1e-5);
-          globalCommandPoint(2) = 0.5;
+          globalCommandPoint(2) = 0.25 + uniDist_(gen_) * 0.2;
         }
         else if(prob < 0.9){
             globalCommandPoint(0) = opponent_cage2base_pos_xy_(0);
             globalCommandPoint(1) = opponent_cage2base_pos_xy_(1);
-            globalCommandPoint(2) = 0.5;
+            globalCommandPoint(2) = 0.25 + uniDist_(gen_) * 0.2;
         }
         else if(prob < 1.0){
-          globalCommandPoint << 0.0, 0.0, 0.5;
+          globalCommandPoint << 0.0, 0.0, 0.25 + uniDist_(gen_) * 0.2;;
         }
         changeGoal = false;
       }
